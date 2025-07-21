@@ -28,6 +28,10 @@ class AppointmentManager:
                 return doc
         return None
 
+    def find_doctors_by_name(self, name: str) -> list:
+        """Return a list of doctors matching the given name (case-insensitive), regardless of department."""
+        return [doc for doc in self.schedule["doctors"] if doc["name"].lower() == name.lower()]
+
     def check_availability(self, doctor_name: str, department: str, day: str, time: str) -> bool:
         doc = self.find_doctor(doctor_name, department)
         if not doc:
@@ -103,3 +107,65 @@ class AppointmentManager:
         old_slot.pop("booked_at", None)
         self._save_schedule()
         return True 
+
+    def get_departments(self) -> list:
+        """Return a list of all unique departments."""
+        return list(set(doc["department"] for doc in self.schedule["doctors"]))
+
+    def get_doctors_by_department(self, department: str) -> list:
+        """Return a list of doctor names in the given department (case-insensitive)."""
+        return [doc["name"] for doc in self.schedule["doctors"] if doc["department"].lower() == department.lower()] 
+
+    def find_available_doctor(self, department: str, day: str, time: str) -> Optional[dict]:
+        """Return a doctor in the department available at the given day and time, or None."""
+        for doc in self.schedule["doctors"]:
+            if doc["department"].lower() == department.lower():
+                for sch in doc["schedule"]:
+                    if sch["day"].lower() == day.lower():
+                        for slot in sch["slots"]:
+                            if slot["time"] == time and slot["available"]:
+                                return {"doctor": doc["name"], "department": department, "day": day, "time": time}
+        return None
+
+    def suggest_nearest_slot(self, department: str, day: str, time: str) -> Optional[dict]:
+        """Suggest the nearest available slot for any doctor in the department on the given day, or on other days if none available."""
+        # First, try same day, any doctor
+        for doc in self.schedule["doctors"]:
+            if doc["department"].lower() == department.lower():
+                for sch in doc["schedule"]:
+                    if sch["day"].lower() == day.lower():
+                        for slot in sch["slots"]:
+                            if slot["available"]:
+                                return {"doctor": doc["name"], "department": department, "day": day, "time": slot["time"]}
+        # Then, try other days
+        for doc in self.schedule["doctors"]:
+            if doc["department"].lower() == department.lower():
+                for sch in doc["schedule"]:
+                    for slot in sch["slots"]:
+                        if slot["available"]:
+                            return {"doctor": doc["name"], "department": department, "day": sch["day"], "time": slot["time"]}
+        return None 
+
+    def get_available_doctors(self, department: str, day: str, time: str) -> list:
+        """Return a list of doctor names in the department available at the given day and time."""
+        available = []
+        for doc in self.schedule["doctors"]:
+            if doc["department"].lower() == department.lower():
+                for sch in doc["schedule"]:
+                    if sch["day"].lower() == day.lower():
+                        for slot in sch["slots"]:
+                            if slot["time"] == time and slot["available"]:
+                                available.append(doc["name"])
+        return available 
+
+    def get_available_doctors_by_date(self, department: str, date: str, time: str) -> list:
+        """Return a list of doctor names in the department available at the given date and time."""
+        available = []
+        for doc in self.schedule["doctors"]:
+            if doc["department"].lower() == department.lower():
+                for sch in doc["schedule"]:
+                    if sch.get("date") == date:
+                        for slot in sch["slots"]:
+                            if slot["time"] == time and slot["available"]:
+                                available.append(doc["name"])
+        return available 

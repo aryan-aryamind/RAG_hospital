@@ -1,21 +1,19 @@
 from flask import Flask, request, jsonify, Response
 from twilio.twiml.voice_response import VoiceResponse, Gather
-from twilio.rest import Client
 from twilio.request_validator import RequestValidator
 import os
 import logging
-import requests
 import json
-
 from datetime import datetime
 from dotenv import load_dotenv
-
-# from the file
-from model import summarize, is_bye, want_admission
-from elevenlab import generate_speech
-from rag import setup_rag_system
+import re
+from rapidfuzz import process
+import dateparser
 from sms import send_sms
 from appointment import AppointmentManager
+import requests
+from model import summarize, is_bye, extract_date, extract_time, is_confirm
+
 appointment_mgr = AppointmentManager()
 user_sessions = {}  # {call_sid: {step, doctor, department, ...}}
 
@@ -116,246 +114,316 @@ def voice_webhook():
         return str(response)
 
 
+def parse_booking_request(text):
+    """Extract department, date, and time from user input using regex and keywords."""
+    department = None
+    date = None
+    time = None
+    # Departments
+    departments = appointment_mgr.get_departments()
+    department = best_match_department(text, departments)
+    # Date (robust: look for dd-mm-yyyy, dd Month yyyy, dd Month, Month dd, etc.)
+    date_match = re.search(r'(\d{1,2}[\-/ ]?(?:[A-Za-z]+)?[\-/ ]?(\d{2,4})?)', text)
+    if date_match:
+        date_str = date_match.group(0)
+        parsed = dateparser.parse(date_str)
+        if parsed:
+            date = parsed.strftime('%Y-%m-%d')
+    else:
+        # Try to parse any date in the text
+        parsed = dateparser.parse(text, settings={'PREFER_DATES_FROM': 'future'})
+        if parsed:
+            date = parsed.strftime('%Y-%m-%d')
+    # Time (robust: look for \d{1,2}(:\d{2})? ?[ap]m or 24h)
+    time_match = re.search(r'(\d{1,2}:\d{2}|\d{1,2} ?[ap]m)', text.lower())
+    if time_match:
+        time_str = time_match.group(1).replace(' ', '').upper()
+        if ':' not in time_str and len(time_str) <= 4:
+            hour_match = re.match(r'(\d{1,2})', time_str)
+            if hour_match:
+                hour = int(hour_match.group(1))
+                suffix = 'AM' if 'AM' in time_str else 'PM'
+                if suffix == 'PM' and hour != 12:
+                    hour += 12
+                slot = f"{hour:02d}:00-{hour:02d}:30"
+                time = slot
+        else:
+            # Try to match to slot format
+            parts = time_str.split(':')
+            if len(parts) == 2:
+                hour = int(parts[0])
+                minute = int(parts[1][:2])
+                slot = f"{hour:02d}:{minute:02d}-{hour:02d}:{minute+30:02d}"
+                time = slot
+    return department, date, time
+
+def best_match_department(user_text, departments, threshold=70):
+    result = process.extractOne(user_text, departments, score_cutoff=threshold)
+    if result:
+        match, score, _ = result
+        logger.info(f"Fuzzy department match: '{user_text}' -> '{match}' (score: {score})")
+        return match if score >= threshold else None
+    logger.info(f"No fuzzy department match for: '{user_text}'")
+    return None
+
 @app.route('/server-rag',methods=['POST'])
 def server_rag():
-    """handle RAG question by calling external API"""
     rag_question = request.values.get('SpeechResult', '')
     logger.info(f"User input speech to rag: {rag_question}")
 
     resp = VoiceResponse()
 
-    # admission = want_admission(rag_question)
-
-    if want_admission(rag_question):
-        gather = Gather(
-            input='dtmf',
-            num_digits=10,
-            action='/collect_phone',
-            method='POST',
-            timeout=15
-        )
-        gather.say("To help you with admission, please enter your 10-digit phone number using the keypad.")
-        resp.append(gather)
-        resp.say("We didn't receive any input. Goodbye!")
-        resp.hangup()
-        return Response(str(resp), mimetype='text/xml')
-
-    if is_bye(rag_question):
-        resp.say("Thank you!")
-        return str(resp)
-
     if 'book' in rag_question.lower() and 'appointment' in rag_question.lower():
-        return start_booking()
+        # Try to parse all details from the utterance
+        department, date, time = parse_booking_request(rag_question)
+        if not department:
+            # If not enough info, ask for department
+            call_sid = request.values.get('CallSid')
+            user_sessions[call_sid] = {'step': 'department'}
+            resp = VoiceResponse()
+            departments = appointment_mgr.get_departments()
+            dept_list = ', '.join(departments)
+            gather = Gather(input='speech', action='/collect-department', method='POST')
+            gather.say(f"Which department do you want to book an appointment in? Available departments are: {dept_list}.")
+            resp.append(gather)
+            resp.say("We didn't receive any input. Goodbye!")
+            return str(resp)
+        if department and date and time:
+            # Find all available doctors for that slot
+            available_doctors = appointment_mgr.get_available_doctors_by_date(department, date, time)
+            if available_doctors:
+                call_sid = request.values.get('CallSid')
+                # If only one doctor, ask for confirmation
+                if len(available_doctors) == 1:
+                    slot = {
+                        'doctor': available_doctors[0],
+                        'department': department,
+                        'date': date,
+                        'time': time
+                    }
+                    user_sessions[call_sid] = {'step': 'confirm', **slot}
+                    gather = Gather(input='speech', action='/confirm-booking', method='POST')
+                    gather.say(f"Dr. {slot['doctor']} is available in {department} on {date} at {time}. Would you like to book with Dr. {slot['doctor']}? Please say yes or no.")
+                    resp.append(gather)
+                    return str(resp)
+                else:
+                    # Multiple doctors available, list them and ask for confirmation for the first
+                    slot = {
+                        'doctor': available_doctors[0],
+                        'department': department,
+                        'date': date,
+                        'time': time
+                    }
+                    user_sessions[call_sid] = {'step': 'confirm', **slot}
+                    doc_list = ', '.join([f"Dr. {d}" for d in available_doctors])
+                    gather = Gather(input='speech', action='/confirm-booking', method='POST')
+                    gather.say(f"The following doctors are available in {department} on {date} at {time}: {doc_list}. Would you like to book with Dr. {slot['doctor']}? Please say yes or no.")
+                    resp.append(gather)
+                    return str(resp)
+            else:
+                # Suggest nearest slot
+                suggestion = appointment_mgr.suggest_nearest_slot(department, date, time)
+                if suggestion:
+                    call_sid = request.values.get('CallSid')
+                    user_sessions[call_sid] = {'step': 'suggest', **suggestion}
+                    gather = Gather(input='speech', action='/confirm-booking', method='POST')
+                    gather.say(f"No doctor is available at that time. The nearest available slot is with Dr. {suggestion['doctor']} in {department} on {suggestion['day']} at {suggestion['time']}. Do you want to book this slot? Please say yes or no.")
+                    resp.append(gather)
+                    return str(resp)
+                else:
+                    resp.say("Sorry, no slots are available in that department. Thank you.")
+                    resp.hangup()
+                    return str(resp)
+        else:
+            # If not enough info, ask for department
+            call_sid = request.values.get('CallSid')
+            user_sessions[call_sid] = {'step': 'department'}
+            resp = VoiceResponse()
+            departments = appointment_mgr.get_departments()
+            dept_list = ', '.join(departments)
+            gather = Gather(input='speech', action='/collect-department', method='POST')
+            gather.say(f"Which department do you want to book an appointment in? Available departments are: {dept_list}.")
+            resp.append(gather)
+            resp.say("We didn't receive any input. Goodbye!")
+            return str(resp)
 
+    # RAG fallback
     try:
         api_resp = requests.post(
             API,
             json={
                 'question': rag_question,
                 "session_id": "user123",
-                }
+            }
         )
-
         if api_resp.status_code == 200:
             rag_ans = api_resp.json().get('answer')
             logger.info(f"RAG API response: {rag_ans}")
-            
             summarize_ans = summarize(rag_ans)
             logger.info(f"Summarize Answer: {summarize_ans}")
-            # eleven_gen = generate_speech(summarize_ans)
-            
             gather = Gather(
                 input='speech',
-                action='/counter-question',
+                action='/server-rag',
                 method='POST',
                 barge_in=True
             )
             gather.say(summarize_ans)
-            # gather.play(eleven_gen)
             resp.append(gather)
         else:
             raise Exception(f"API returned status {api_resp.status_code}")
-    
     except Exception as e:
         logger.error(f"Error calling RAG API: {e}")
         resp.say("Sorry, I'm having trouble accessing the information right now.")
-
-    resp.redirect('/question')
     return str(resp)
 
-
-@app.route('/counter-question', methods=['POST'])
-def counter_question():
-    """"Give answers to the counter question"""
-    counter_question = request.values.get('SpeechResult', '')
-    logger.info(f"User input Speech: {counter_question}")
-    resp = VoiceResponse()
-    try:
-        api_resp = requests.post(
-            API,
-            json={
-                'question': counter_question,
-                "session_id": "user123",
-                }
-        )
-
-        if api_resp.status_code == 200:
-            rag_ans = api_resp.json().get('answer')
-            logger.info(f"RAG API response: {rag_ans}")
-            
-            summarize_ans = summarize(rag_ans)
-            logger.info(f"Summarize Answer: {summarize_ans}")
-            # eleven_gen = generate_speech(summarize_ans)
-
-            # Wrap the response in a Gather to allow interruption
-            gather = Gather(
-                input='speech',
-                action='/counter-question',
-                method='POST',
-                barge_in=True
-            )
-            gather.say(summarize_ans)
-            # gather.play(eleven_gen)
-            resp.append(gather)
-    except Exception as e:
-        logger.error(f"Error calling RAG API: {e}")
-        resp.say("Sorry, I'm having trouble accessing the information right now.")
-
-    resp.redirect('/question')
-    return str(resp)
-
-@app.route('/question',methods=['GET','POST'])
-def get_question():
-    """Get the question"""
-    response = VoiceResponse()
-    gather = Gather(
-            input='speech',
-            action='/server-rag',
-            method='POST',
-            # speechTimeout="auto",
-            barge_in=True,
-            # timeout=5
-        )
-    response.append(gather)
-    # response.say("We didn't receive any input. Please call back later. Goodbye!", voice='alice')
-    return str(response)
-
-@app.route('/collect_phone', methods=['POST'])
-def collect_phone():
-    response = VoiceResponse()
-    digits = request.form.get('Digits', '')
-    if len(digits) == 10:
-        # Save phone number to JSON file
-        try:
-            if os.path.exists(ADMISSION_JSON):
-                with open(ADMISSION_JSON, 'r') as f:
-                    leads = json.load(f)
-            else:
-                leads = []
-            leads.append({"phone": digits})
-            with open(ADMISSION_JSON, 'w') as f:
-                json.dump(leads, f, indent=2)
-        except Exception as e:
-            logger.error(f"Error saving phone number: {e}")
-        # Send SMS with link
-        try:
-            send_sms(f"+91{digits}", 
-            f"Thank you for your interest! You can continue your queries here Contact 12345 ")
-        except Exception as e:
-            logger.error(f"Error sending SMS: {e}")
-        response.say("Thank you. We have sent you a link to our Dashboard for Payment. You can contact your queries at this 12345 number, or ask me more questions now.")
-    else:
-        response.say("Sorry, that was not a valid phone number. Please try again.")
-        response.redirect('/voice')
-    return Response(str(response), mimetype='text/xml')
-
-@app.route('/start-booking', methods=['POST'])
-def start_booking():
-    call_sid = request.values.get('CallSid')
-    user_sessions[call_sid] = {'step': 'doctor'}
-    resp = VoiceResponse()
-    gather = Gather(input='speech', action='/collect-doctor', method='POST')
-    gather.say("Which doctor would you like to book an appointment with?")
-    resp.append(gather)
-    resp.say("We didn't receive any input. Goodbye!")
-    return str(resp)
-
-@app.route('/collect-doctor', methods=['POST'])
-def collect_doctor():
-    call_sid = request.values.get('CallSid')
-    doctor = request.values.get('SpeechResult', '')
-    user_sessions[call_sid]['doctor'] = doctor
-    user_sessions[call_sid]['step'] = 'department'
-    resp = VoiceResponse()
-    gather = Gather(input='speech', action='/collect-department', method='POST')
-    gather.say(f"Which department is {doctor} in?")
-    resp.append(gather)
-    return str(resp)
 
 @app.route('/collect-department', methods=['POST'])
 def collect_department():
     call_sid = request.values.get('CallSid')
-    department = request.values.get('SpeechResult', '')
-    user_sessions[call_sid]['department'] = department
-    user_sessions[call_sid]['step'] = 'day'
+    session = user_sessions.get(call_sid, {})
+    if session.get('department'):
+        department = session['department']
+    else:
+        spoken_dept = request.values.get('SpeechResult', '')
+        departments = appointment_mgr.get_departments()
+        department = best_match_department(spoken_dept, departments)
+        session['department'] = department
+        user_sessions[call_sid] = session
     resp = VoiceResponse()
-    gather = Gather(input='speech', action='/collect-day', method='POST')
-    gather.say("Which day do you want the appointment?")
+    if not department:
+        dept_list = ', '.join(appointment_mgr.get_departments())
+        gather = Gather(input='speech', action='/collect-department', method='POST')
+        gather.say(f"Sorry, no such department. Available departments are: {dept_list}. Please say the department.")
+        resp.append(gather)
+        return str(resp)
+    # Ask for date
+    session['department'] = department
+    user_sessions[call_sid] = session
+    gather = Gather(input='speech', action='/collect-date', method='POST')
+    gather.say("For which date do you want the appointment? Please say the date in the format 21 August 2025 or 21-08-2025.")
     resp.append(gather)
     return str(resp)
 
-@app.route('/collect-day', methods=['POST'])
-def collect_day():
+# New: /collect-date
+@app.route('/collect-date', methods=['POST'])
+def collect_date():
     call_sid = request.values.get('CallSid')
-    day = request.values.get('SpeechResult', '')
-    user_sessions[call_sid]['day'] = day
-    user_sessions[call_sid]['step'] = 'time'
-    resp = VoiceResponse()
-    gather = Gather(input='speech', action='/collect-time', method='POST')
-    gather.say("What time do you want the appointment?")
-    resp.append(gather)
-    return str(resp)
+    session = user_sessions.get(call_sid, {})
+    date_text = request.values.get('SpeechResult', '')
+    logger.info(f"User said date: {date_text}")
+    # Use LLM-powered date extraction
+    date = extract_date(date_text)
+    if not date:
+        # fallback to dateparser
+        parsed = dateparser.parse(date_text)
+        if parsed:
+            date = parsed.strftime('%Y-%m-%d')
+    if date:
+        logger.info(f"Parsed date: {date}")
+        session['date'] = date
+        user_sessions[call_sid] = session
+        resp = VoiceResponse()
+        gather = Gather(input='speech', action='/collect-time', method='POST')
+        gather.say("At what time? You can say 3pm, 14:00, or 2:30 p.m.")
+        resp.append(gather)
+        return str(resp)
+    else:
+        logger.warning(f"Could not parse date from: {date_text}")
+        resp = VoiceResponse()
+        gather = Gather(input='speech', action='/collect-date', method='POST')
+        gather.say("Sorry, I didn't understand the date. Please say the date in the format 21 August 2025 or 21-08-2025.")
+        resp.append(gather)
+        return str(resp)
 
 @app.route('/collect-time', methods=['POST'])
 def collect_time():
     call_sid = request.values.get('CallSid')
-    time = request.values.get('SpeechResult', '')
-    session = user_sessions[call_sid]
-    session['time'] = time
-    session['step'] = 'name'
-    available = appointment_mgr.check_availability(session['doctor'], session['department'], session['day'], time)
-    resp = VoiceResponse()
-    if available:
-        gather = Gather(input='speech', action='/collect-name', method='POST')
-        gather.say("Please tell me your name for the booking.")
+    session = user_sessions.get(call_sid, {})
+    time_text = request.values.get('SpeechResult', '')
+    department = session.get('department')
+    date = session.get('date')
+    # Get slots for the selected department and date
+    slots = []
+    for doc in appointment_mgr.schedule['doctors']:
+        if doc['department'].lower() == department.lower():
+            for sch in doc['schedule']:
+                if sch.get('date') == date:
+                    slots = sch['slots']
+                    break
+    # Use LLM-powered time extraction
+    time_val = extract_time(time_text)
+    time = None
+    if time_val and slots:
+        # Find the slot that matches the extracted time
+        for slot in slots:
+            start, _ = slot['time'].split('-')
+            if start == time_val:
+                time = slot['time']
+                break
+    if not time:
+        # fallback to dateparser
+        parsed = dateparser.parse(time_text)
+        if parsed and slots:
+            for slot in slots:
+                start, _ = slot['time'].split('-')
+                if parsed.strftime('%H:%M') == start:
+                    time = slot['time']
+                    break
+    if not time:
+        resp = VoiceResponse()
+        gather = Gather(input='speech', action='/collect-time', method='POST')
+        slot_list = ', '.join([slot['time'] for slot in slots]) if slots else 'No slots available.'
+        gather.say(f"Sorry, I didn't understand the time or no matching slot found. Available slots are: {slot_list}. Please say the time in the format 3pm, 14:00, or 2:30 p.m.")
         resp.append(gather)
+        return str(resp)
+    session['time'] = time
+    user_sessions[call_sid] = session
+    # Find all available doctors for that department, date, and time
+    available_doctors = appointment_mgr.get_available_doctors_by_date(department, date, time)
+    resp = VoiceResponse()
+    if available_doctors:
+        slot = {
+            'doctor': available_doctors[0],
+            'department': department,
+            'date': date,
+            'time': time
+        }
+        user_sessions[call_sid] = {'step': 'confirm', **slot}
+        gather = Gather(input='speech', action='/confirm-booking', method='POST')
+        gather.say(f" {slot['doctor']} is available in {department} on {date} at {time}. Would you like to book with {slot['doctor']}? Please say yes or no.")
+        resp.append(gather)
+        return str(resp)
     else:
-        alt = appointment_mgr.suggest_alternative(session['doctor'], session['department'], session['day'], time)
-        if alt:
-            session['suggested'] = alt
-            gather = Gather(input='speech', action='/handle-suggestion', method='POST')
-            gather.say(f"Sorry, that slot is not available. Would you like to book {alt['day']} at {alt['time']} instead? Please say yes or no.")
-            resp.append(gather)
-        else:
-            resp.say("Sorry, no slots are available. Thank you.")
-            resp.hangup()
-    return str(resp)
+        resp.say("Sorry, no doctors are available at that time. Please try another time or date.")
+        resp.hangup()
+        return str(resp)
 
-@app.route('/handle-suggestion', methods=['POST'])
-def handle_suggestion():
+def find_matching_slot(slots, parsed_time):
+    # slots: list of slot dicts with 'time'
+    # parsed_time: datetime.time object
+    for slot in slots:
+        start, _ = slot['time'].split('-')
+        start_hour, start_minute = map(int, start.split(':'))
+        if parsed_time.hour == start_hour and parsed_time.minute == start_minute:
+            return slot['time']
+    return None
+
+@app.route('/confirm-booking', methods=['POST'])
+def confirm_booking():
     call_sid = request.values.get('CallSid')
     answer = request.values.get('SpeechResult', '').strip().lower()
-    session = user_sessions[call_sid]
+    session = user_sessions.get(call_sid, {})
+    logger.info(f"/confirm-booking: User response: {answer}, Session: {session}")
     resp = VoiceResponse()
-    if answer in ['yes', 'yeah', 'yup', 'sure']:
-        session['day'] = session['suggested']['day']
-        session['time'] = session['suggested']['time']
+    if is_confirm(answer):
+        # Collect user name
         session['step'] = 'name'
+        user_sessions[call_sid] = session
         gather = Gather(input='speech', action='/collect-name', method='POST')
-        gather.say("Great. Please tell me your name for the booking.")
+        gather.say("Can you please share your good name for the booking?")
         resp.append(gather)
     else:
-        resp.say("Okay, thank you for calling.")
+        resp.say("Okay, thank you for calling. You can try booking another slot if you wish.")
         resp.hangup()
     return str(resp)
 
@@ -363,35 +431,95 @@ def handle_suggestion():
 def collect_name():
     call_sid = request.values.get('CallSid')
     name = request.values.get('SpeechResult', '')
-    user_sessions[call_sid]['name'] = name
-    user_sessions[call_sid]['step'] = 'mobile'
+    logger.info(f"/collect-name: User said name: {name}")
+    session = user_sessions.get(call_sid, {})
     resp = VoiceResponse()
-    gather = Gather(input='dtmf', num_digits=10, action='/finalize-booking', method='POST')
-    gather.say("Please enter your 10 digit mobile number using the keypad.")
+    if not name.strip():
+        gather = Gather(input='speech', action='/collect-name', method='POST', timeout=10)
+        gather.say("Sorry, I didn't catch your name. Can you please share your good name for the booking?")
+        resp.append(gather)
+        resp.say("Sorry, I didn't catch your name. Please call again to book your appointment. Goodbye!")
+        resp.hangup()
+        return str(resp)
+    session['name'] = name
+    session['step'] = 'mobile'
+    user_sessions[call_sid] = session
+    # Increase DTMF timeout to 15 seconds
+    gather = Gather(input='dtmf', num_digits=10, action='/confirm-mobile', method='POST', timeout=15)
+    gather.say("Thank you. Now, please enter your 10 digit mobile number using the keypad.")
     resp.append(gather)
+    return str(resp)
+
+@app.route('/confirm-mobile', methods=['POST'])
+def confirm_mobile():
+    call_sid = request.values.get('CallSid')
+    digits = request.values.get('Digits', '')
+    logger.info(f"/confirm-mobile: Received digits: {digits}")
+    session = user_sessions.get(call_sid, {})
+    session['pending_mobile'] = digits
+    user_sessions[call_sid] = session
+    resp = VoiceResponse()
+    try:
+        if len(digits) == 10:
+            # Read back all details for confirmation
+            details = (
+                f"You are booking an appointment with {session.get('doctor','')} in {session.get('department','')} on {session.get('date','')} at {session.get('time','')}. "
+                f"Your name is {session.get('name','')} and your mobile number is {digits}. Is this correct? Please say yes or no."
+            )
+            gather = Gather(input='speech', action='/finalize-booking', method='POST')
+            gather.say(details)
+            resp.append(gather)
+        else:
+            logger.warning(f"/confirm-mobile: Invalid mobile number entered: {digits}")
+            gather = Gather(input='dtmf', num_digits=10, action='/confirm-mobile', method='POST', timeout=15)
+            gather.say("That was not a valid mobile number. Please enter your 10 digit mobile number using the keypad.")
+            resp.append(gather)
+    except Exception as e:
+        logger.error(f"/confirm-mobile: Exception occurred: {e}")
+        resp.say("Sorry, there was an error processing your input. Please try again later.")
+        resp.hangup()
     return str(resp)
 
 @app.route('/finalize-booking', methods=['POST'])
 def finalize_booking():
     call_sid = request.values.get('CallSid')
-    digits = request.values.get('Digits', '')
-    session = user_sessions[call_sid]
+    answer = request.values.get('SpeechResult', '').strip().lower()
+    session = user_sessions.get(call_sid, {})
     resp = VoiceResponse()
-    if len(digits) == 10:
+    digits = session.get('pending_mobile', '')
+    if is_confirm(answer) and len(digits) == 10:
+        # Book the slot
         booked = appointment_mgr.book_slot(
-            session['doctor'], session['department'], session['day'], session['time'],
+            session['doctor'], session['department'], session.get('day', ''), session['time'],
             session['name'], digits
         )
+        log_msg = (
+            f"Appointment booked: Doctor={session['doctor']}, Department={session['department']}, "
+            f"Date={session.get('date','')}, Time={session['time']}, Name={session['name']}, Mobile={digits}"
+        )
         if booked:
-            send_sms(f"+91{digits}", f"Your appointment with {session['doctor']} is confirmed for {session['day']} at {session['time']}. Pay here: <link>")
-            resp.say("Your appointment is confirmed. We have sent you a confirmation SMS with a payment link. Thank you!")
+            logger.info(log_msg)
+            sms_msg = (
+                f"Your appointment is confirmed!\n"
+                f"Doctor: {session['doctor']}\nDepartment: {session['department']}\nDate: {session.get('date','')}\nTime: {session['time']}\nName: {session['name']}\nMobile: {digits}"
+            )
+            send_sms(f"+91{digits}", sms_msg)
+            resp.say("Your appointment is confirmed. We have sent you a confirmation SMS with all details. Thank you!")
         else:
+            logger.warning("Appointment booking failed: " + log_msg)
             resp.say("Sorry, the slot was just booked by someone else. Please try again.")
+        resp.hangup()
+        return str(resp)
+    elif answer in ['no', 'nope', 'nah']:
+        gather = Gather(input='speech', action='/collect-name', method='POST')
+        gather.say("Let's try again. Please tell me your name for the booking.")
+        resp.append(gather)
+        return str(resp)
     else:
-        resp.say("That was not a valid mobile number. Please try again.")
-        resp.redirect('/collect-name')
-    resp.hangup()
-    return str(resp)
+        gather = Gather(input='speech', action='/finalize-booking', method='POST')
+        gather.say("Is the information correct? Please say yes or no.")
+        resp.append(gather)
+        return str(resp)
 
 
 @app.route('/status', methods=['POST'])

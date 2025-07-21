@@ -11,3 +11,5 @@ sentence-transformers
 faiss-cpu
 fastapi
 uvicorn
+rapidfuzz
+dateparser

@@ -1,4 +1,4 @@
-# Hiospital Voice Assistant
+# Hospital Voice Assistant
 
 This project is a Flask + Twilio based conversational voice assistant for booking doctor appointments at a hospital. It guides users through booking via phone call, manages available slots using a JSON file, and sends SMS confirmations with payment links.
 
