@@ -13,3 +13,4 @@ fastapi
 uvicorn
 rapidfuzz
 dateparser
+psycopg2-binary
