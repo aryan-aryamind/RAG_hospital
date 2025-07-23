@@ -1,0 +1,100 @@
+{
+  "tests": [
+    {
+      "name": "Complete Blood Count (CBC)",
+      "category": "lab_test",
+      "timings": "8:00 AM to 6:00 PM",
+      "home_sample_collection": true
+    },
+    {
+      "name": "Lipid Profile",
+      "category": "lab_test",
+      "timings": "9:00 AM to 5:00 PM",
+      "home_sample_collection": true
+    },
+    {
+      "name": "Blood Sugar Test (Fasting/PP)",
+      "category": "lab_test",
+      "timings": "7:30 AM to 4:00 PM",
+      "home_sample_collection": true
+    },
+    {
+      "name": "Thyroid Function Test (T3, T4, TSH)",
+      "category": "lab_test",
+      "timings": "8:00 AM to 6:00 PM",
+      "home_sample_collection": true
+    },
+    {
+      "name": "Liver Function Test (LFT)",
+      "category": "lab_test",
+      "timings": "8:00 AM to 5:30 PM",
+      "home_sample_collection": true
+    },
+    {
+      "name": "Kidney Function Test (KFT)",
+      "category": "lab_test",
+      "timings": "9:00 AM to 6:00 PM",
+      "home_sample_collection": true
+    },
+    {
+      "name": "Vitamin D Test",
+      "category": "lab_test",
+      "timings": "9:00 AM to 5:00 PM",
+      "home_sample_collection": true
+    },
+    {
+      "name": "Urine Routine Test",
+      "category": "lab_test",
+      "timings": "8:30 AM to 4:30 PM",
+      "home_sample_collection": true
+    },
+    {
+      "name": "X-Ray Chest",
+      "category": "scan",
+      "timings": "9:00 AM to 7:00 PM",
+      "home_sample_collection": false
+    },
+    {
+      "name": "MRI Brain",
+      "category": "scan",
+      "timings": "10:00 AM to 6:00 PM",
+      "home_sample_collection": false
+    },
+    {
+      "name": "CT Scan Abdomen",
+      "category": "scan",
+      "timings": "9:30 AM to 6:00 PM",
+      "home_sample_collection": false
+    },
+    {
+      "name": "Ultrasound Abdomen",
+      "category": "scan",
+      "timings": "8:00 AM to 3:00 PM",
+      "home_sample_collection": false
+    },
+    {
+      "name": "ECG",
+      "category": "scan",
+      "timings": "8:00 AM to 2:00 PM",
+      "home_sample_collection": false
+    },
+    {
+      "name": "Basic Health Checkup",
+      "category": "health_package",
+      "timings": "8:00 AM to 4:00 PM",
+      "home_sample_collection": true
+    },
+    {
+      "name": "Advanced Full Body Checkup",
+      "category": "health_package",
+      "timings": "8:00 AM to 1:00 PM",
+      "home_sample_collection": true
+    },
+    {
+      "name": "Executive Health Package",
+      "category": "health_package",
+      "timings": "8:00 AM to 2:00 PM",
+      "home_sample_collection": true
+    }
+  ]
+} 

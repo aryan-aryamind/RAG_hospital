@@ -1,0 +1,2452 @@
+{
+  "doctors": [
+    {
+      "name": "Dr. Adam",
+      "department": "Cardiology",
+      "schedule": [
+        {
+          "day": "Monday",
+          "date": "2025-07-22",
+          "year": 2025,
+          "slots": [
+            {
+              "time": "10:00-10:30",
+              "available": true
+            },
+            {
+              "time": "10:30-11:00",
+              "available": true
+            },
+            {
+              "time": "11:00-11:30",
+              "available": true
+            },
+            {
+              "time": "11:30-12:00",
+              "available": true
+            },
+            {
+              "time": "12:00-12:30",
+              "available": true
+            },
+            {
+              "time": "12:30-13:00",
+              "available": true
+            },
+            {
+              "time": "14:00-14:30",
+              "available": true
+            },
+            {
+              "time": "14:30-15:00",
+              "available": true
+            },
+            {
+              "time": "15:00-15:30",
+              "available": true
+            },
+            {
+              "time": "15:30-16:00",
+              "available": true
+            },
+            {
+              "time": "16:00-16:30",
+              "available": true
+            },
+            {
+              "time": "16:30-17:00",
+              "available": true
+            }
+          ]
+        },
+        {
+          "day": "Tuesday",
+          "date": "2025-07-23",
+          "year": 2025,
+          "slots": [
+            {
+              "time": "10:00-10:30",
+              "available": true
+            },
+            {
+              "time": "10:30-11:00",
+              "available": true
+            },
+            {
+              "time": "11:00-11:30",
+              "available": true
+            },
+            {
+              "time": "11:30-12:00",
+              "available": true
+            },
+            {
+              "time": "12:00-12:30",
+              "available": true
+            },
+            {
+              "time": "12:30-13:00",
+              "available": true
+            },
+            {
+              "time": "14:00-14:30",
+              "available": true
+            },
+            {
+              "time": "14:30-15:00",
+              "available": true
+            },
+            {
+              "time": "15:00-15:30",
+              "available": true
+            },
+            {
+              "time": "15:30-16:00",
+              "available": true
+            },
+            {
+              "time": "16:00-16:30",
+              "available": true
+            },
+            {
+              "time": "16:30-17:00",
+              "available": true
+            }
+          ]
+        },
+        {
+          "day": "Wednesday",
+          "date": "2025-07-24",
+          "year": 2025,
+          "slots": [
+            {
+              "time": "10:00-10:30",
+              "available": true
+            },
+            {
+              "time": "10:30-11:00",
+              "available": true
+            },
+            {
+              "time": "11:00-11:30",
+              "available": true
+            },
+            {
+              "time": "11:30-12:00",
+              "available": true
+            },
+            {
+              "time": "12:00-12:30",
+              "available": true
+            },
+            {
+              "time": "12:30-13:00",
+              "available": true
+            },
+            {
+              "time": "14:00-14:30",
+              "available": true
+            },
+            {
+              "time": "14:30-15:00",
+              "available": true
+            },
+            {
+              "time": "15:00-15:30",
+              "available": true
+            },
+            {
+              "time": "15:30-16:00",
+              "available": true
+            },
+            {
+              "time": "16:00-16:30",
+              "available": true
+            },
+            {
+              "time": "16:30-17:00",
+              "available": true
+            }
+          ]
+        },
+        {
+          "day": "Thursday",
+          "date": "2025-07-25",
+          "year": 2025,
+          "slots": [
+            {
+              "time": "10:00-10:30",
+              "available": true
+            },
+            {
+              "time": "10:30-11:00",
+              "available": true
+            },
+            {
+              "time": "11:00-11:30",
+              "available": true
+            },
+            {
+              "time": "11:30-12:00",
+              "available": true
+            },
+            {
+              "time": "12:00-12:30",
+              "available": true
+            },
+            {
+              "time": "12:30-13:00",
+              "available": true
+            },
+            {
+              "time": "14:00-14:30",
+              "available": true
+            },
+            {
+              "time": "14:30-15:00",
+              "available": true
+            },
+            {
+              "time": "15:00-15:30",
+              "available": true
+            },
+            {
+              "time": "15:30-16:00",
+              "available": true
+            },
+            {
+              "time": "16:00-16:30",
+              "available": true
+            },
+            {
+              "time": "16:30-17:00",
+              "available": true
+            }
+          ]
+        },
+        {
+          "day": "Friday",
+          "date": "2025-07-26",
+          "year": 2025,
+          "slots": [
+            {
+              "time": "10:00-10:30",
+              "available": true
+            },
+            {
+              "time": "10:30-11:00",
+              "available": true
+            },
+            {
+              "time": "11:00-11:30",
+              "available": true
+            },
+            {
+              "time": "11:30-12:00",
+              "available": true
+            },
+            {
+              "time": "12:00-12:30",
+              "available": true
+            },
+            {
+              "time": "12:30-13:00",
+              "available": true
+            },
+            {
+              "time": "14:00-14:30",
+              "available": true
+            },
+            {
+              "time": "14:30-15:00",
+              "available": true
+            },
+            {
+              "time": "15:00-15:30",
+              "available": true
+            },
+            {
+              "time": "15:30-16:00",
+              "available": true
+            },
+            {
+              "time": "16:00-16:30",
+              "available": true
+            },
+            {
+              "time": "16:30-17:00",
+              "available": true
+            }
+          ]
+        },
+        {
+          "day": "Saturday",
+          "date": "2025-07-27",
+          "year": 2025,
+          "slots": [
+            {
+              "time": "10:00-10:30",
+              "available": true
+            },
+            {
+              "time": "10:30-11:00",
+              "available": true
+            },
+            {
+              "time": "11:00-11:30",
+              "available": true
+            },
+            {
+              "time": "11:30-12:00",
+              "available": true
+            },
+            {
+              "time": "12:00-12:30",
+              "available": true
+            },
+            {
+              "time": "12:30-13:00",
+              "available": true
+            },
+            {
+              "time": "14:00-14:30",
+              "available": true
+            },
+            {
+              "time": "14:30-15:00",
+              "available": true
+            },
+            {
+              "time": "15:00-15:30",
+              "available": true
+            },
+            {
+              "time": "15:30-16:00",
+              "available": true
+            },
+            {
+              "time": "16:00-16:30",
+              "available": true
+            },
+            {
+              "time": "16:30-17:00",
+              "available": true
+            }
+          ]
+        },
+        {
+          "date": "2025-07-28",
+          "slots": [
+            {
+              "time": "10:00-10:30",
+              "available": true
+            },
+            {
+              "time": "10:30-11:00",
+              "available": true
+            },
+            {
+              "time": "11:00-11:30",
+              "available": true
+            },
+            {
+              "time": "11:30-12:00",
+              "available": true
+            },
+            {
+              "time": "12:00-12:30",
+              "available": true
+            },
+            {
+              "time": "12:30-13:00",
+              "available": true
+            },
+            {
+              "time": "14:00-14:30",
+              "available": true
+            },
+            {
+              "time": "14:30-15:00",
+              "available": true
+            }
+          ]
+        },
+        {
+          "date": "2025-07-29",
+          "slots": [
+            {
+              "time": "10:00-10:30",
+              "available": true
+            },
+            {
+              "time": "10:30-11:00",
+              "available": true
+            },
+            {
+              "time": "11:00-11:30",
+              "available": true
+            },
+            {
+              "time": "11:30-12:00",
+              "available": true
+            },
+            {
+              "time": "12:00-12:30",
+              "available": true
+            },
+            {
+              "time": "12:30-13:00",
+              "available": true
+            },
+            {
+              "time": "14:00-14:30",
+              "available": true
+            },
+            {
+              "time": "14:30-15:00",
+              "available": true
+            }
+          ]
+        },
+        {
+          "date": "2025-07-30",
+          "slots": [
+            {
+              "time": "10:00-10:30",
+              "available": true
+            },
+            {
+              "time": "10:30-11:00",
+              "available": true
+            },
+            {
+              "time": "11:00-11:30",
+              "available": true
+            },
+            {
+              "time": "11:30-12:00",
+              "available": true
+            },
+            {
+              "time": "12:00-12:30",
+              "available": true
+            },
+            {
+              "time": "12:30-13:00",
+              "available": true
+            },
+            {
+              "time": "14:00-14:30",
+              "available": true
+            },
+            {
+              "time": "14:30-15:00",
+              "available": true
+            }
+          ]
+        },
+        {
+          "date": "2025-07-31",
+          "slots": [
+            {
+              "time": "10:00-10:30",
+              "available": true
+            },
+            {
+              "time": "10:30-11:00",
+              "available": true
+            },
+            {
+              "time": "11:00-11:30",
+              "available": true
+            },
+            {
+              "time": "11:30-12:00",
+              "available": true
+            },
+            {
+              "time": "12:00-12:30",
+              "available": true
+            },
+            {
+              "time": "12:30-13:00",
+              "available": true
+            },
+            {
+              "time": "14:00-14:30",
+              "available": true
+            },
+            {
+              "time": "14:30-15:00",
+              "available": true
+            }
+          ]
+        },
+        {
+          "date": "2025-08-01",
+          "slots": [
+            {
+              "time": "10:00-10:30",
+              "available": true
+            },
+            {
+              "time": "10:30-11:00",
+              "available": true
+            },
+            {
+              "time": "11:00-11:30",
+              "available": true
+            },
+            {
+              "time": "11:30-12:00",
+              "available": true
+            },
+            {
+              "time": "12:00-12:30",
+              "available": true
+            },
+            {
+              "time": "12:30-13:00",
+              "available": true
+            },
+            {
+              "time": "14:00-14:30",
+              "available": true
+            },
+            {
+              "time": "14:30-15:00",
+              "available": true
+            }
+          ]
+        },
+        {
+          "date": "2025-08-02",
+          "slots": [
+            {
+              "time": "10:00-10:30",
+              "available": true
+            },
+            {
+              "time": "10:30-11:00",
+              "available": true
+            },
+            {
+              "time": "11:00-11:30",
+              "available": true
+            },
+            {
+              "time": "11:30-12:00",
+              "available": true
+            },
+            {
+              "time": "12:00-12:30",
+              "available": true
+            },
+            {
+              "time": "12:30-13:00",
+              "available": true
+            },
+            {
+              "time": "14:00-14:30",
+              "available": true
+            },
+            {
+              "time": "14:30-15:00",
+              "available": true
+            }
+          ]
+        },
+        {
+          "date": "2025-08-03",
+          "slots": [
+            {
+              "time": "10:00-10:30",
+              "available": true
+            },
+            {
+              "time": "10:30-11:00",
+              "available": true
+            },
+            {
+              "time": "11:00-11:30",
+              "available": true
+            },
+            {
+              "time": "11:30-12:00",
+              "available": true
+            },
+            {
+              "time": "12:00-12:30",
+              "available": true
+            },
+            {
+              "time": "12:30-13:00",
+              "available": true
+            },
+            {
+              "time": "14:00-14:30",
+              "available": true
+            },
+            {
+              "time": "14:30-15:00",
+              "available": true
+            }
+          ]
+        },
+        {
+          "date": "2025-08-04",
+          "slots": [
+            {
+              "time": "10:00-10:30",
+              "available": true
+            },
+            {
+              "time": "10:30-11:00",
+              "available": true
+            },
+            {
+              "time": "11:00-11:30",
+              "available": true
+            },
+            {
+              "time": "11:30-12:00",
+              "available": true
+            },
+            {
+              "time": "12:00-12:30",
+              "available": true
+            },
+            {
+              "time": "12:30-13:00",
+              "available": true
+            },
+            {
+              "time": "14:00-14:30",
+              "available": true
+            },
+            {
+              "time": "14:30-15:00",
+              "available": true
+            }
+          ]
+        },
+        {
+          "date": "2025-08-05",
+          "slots": [
+            {
+              "time": "10:00-10:30",
+              "available": true
+            },
+            {
+              "time": "10:30-11:00",
+              "available": true
+            },
+            {
+              "time": "11:00-11:30",
+              "available": true
+            },
+            {
+              "time": "11:30-12:00",
+              "available": true
+            },
+            {
+              "time": "12:00-12:30",
+              "available": true
+            },
+            {
+              "time": "12:30-13:00",
+              "available": true
+            },
+            {
+              "time": "14:00-14:30",
+              "available": true
+            },
+            {
+              "time": "14:30-15:00",
+              "available": true
+            }
+          ]
+        },
+        {
+          "date": "2025-08-06",
+          "slots": [
+            {
+              "time": "10:00-10:30",
+              "available": true
+            },
+            {
+              "time": "10:30-11:00",
+              "available": true
+            },
+            {
+              "time": "11:00-11:30",
+              "available": true
+            },
+            {
+              "time": "11:30-12:00",
+              "available": true
+            },
+            {
+              "time": "12:00-12:30",
+              "available": true
+            },
+            {
+              "time": "12:30-13:00",
+              "available": true
+            },
+            {
+              "time": "14:00-14:30",
+              "available": true
+            },
+            {
+              "time": "14:30-15:00",
+              "available": true
+            }
+          ]
+        },
+        {
+          "date": "2025-08-07",
+          "slots": [
+            {
+              "time": "10:00-10:30",
+              "available": true
+            },
+            {
+              "time": "10:30-11:00",
+              "available": true
+            },
+            {
+              "time": "11:00-11:30",
+              "available": true
+            },
+            {
+              "time": "11:30-12:00",
+              "available": true
+            },
+            {
+              "time": "12:00-12:30",
+              "available": true
+            },
+            {
+              "time": "12:30-13:00",
+              "available": true
+            },
+            {
+              "time": "14:00-14:30",
+              "available": true
+            },
+            {
+              "time": "14:30-15:00",
+              "available": true
+            }
+          ]
+        },
+        {
+          "date": "2025-08-08",
+          "slots": [
+            {
+              "time": "10:00-10:30",
+              "available": true
+            },
+            {
+              "time": "10:30-11:00",
+              "available": true
+            },
+            {
+              "time": "11:00-11:30",
+              "available": true
+            },
+            {
+              "time": "11:30-12:00",
+              "available": true
+            },
+            {
+              "time": "12:00-12:30",
+              "available": true
+            },
+            {
+              "time": "12:30-13:00",
+              "available": true
+            },
+            {
+              "time": "14:00-14:30",
+              "available": true
+            },
+            {
+              "time": "14:30-15:00",
+              "available": true
+            }
+          ]
+        },
+        {
+          "date": "2025-08-09",
+          "slots": [
+            {
+              "time": "10:00-10:30",
+              "available": true
+            },
+            {
+              "time": "10:30-11:00",
+              "available": true
+            },
+            {
+              "time": "11:00-11:30",
+              "available": true
+            },
+            {
+              "time": "11:30-12:00",
+              "available": true
+            },
+            {
+              "time": "12:00-12:30",
+              "available": true
+            },
+            {
+              "time": "12:30-13:00",
+              "available": true
+            },
+            {
+              "time": "14:00-14:30",
+              "available": true
+            },
+            {
+              "time": "14:30-15:00",
+              "available": true
+            }
+          ]
+        },
+        {
+          "date": "2025-08-10",
+          "slots": [
+            {
+              "time": "10:00-10:30",
+              "available": true
+            },
+            {
+              "time": "10:30-11:00",
+              "available": true
+            },
+            {
+              "time": "11:00-11:30",
+              "available": true
+            },
+            {
+              "time": "11:30-12:00",
+              "available": true
+            },
+            {
+              "time": "12:00-12:30",
+              "available": true
+            },
+            {
+              "time": "12:30-13:00",
+              "available": true
+            },
+            {
+              "time": "14:00-14:30",
+              "available": true
+            },
+            {
+              "time": "14:30-15:00",
+              "available": true
+            }
+          ]
+        },
+        {
+          "date": "2025-08-11",
+          "slots": [
+            {
+              "time": "10:00-10:30",
+              "available": true
+            },
+            {
+              "time": "10:30-11:00",
+              "available": true
+            },
+            {
+              "time": "11:00-11:30",
+              "available": true
+            },
+            {
+              "time": "11:30-12:00",
+              "available": true
+            },
+            {
+              "time": "12:00-12:30",
+              "available": true
+            },
+            {
+              "time": "12:30-13:00",
+              "available": true
+            },
+            {
+              "time": "14:00-14:30",
+              "available": true
+            },
+            {
+              "time": "14:30-15:00",
+              "available": true
+            }
+          ]
+        },
+        {
+          "date": "2025-08-12",
+          "slots": [
+            {
+              "time": "10:00-10:30",
+              "available": true
+            },
+            {
+              "time": "10:30-11:00",
+              "available": true
+            },
+            {
+              "time": "11:00-11:30",
+              "available": true
+            },
+            {
+              "time": "11:30-12:00",
+              "available": true
+            },
+            {
+              "time": "12:00-12:30",
+              "available": true
+            },
+            {
+              "time": "12:30-13:00",
+              "available": true
+            },
+            {
+              "time": "14:00-14:30",
+              "available": true
+            },
+            {
+              "time": "14:30-15:00",
+              "available": true
+            }
+          ]
+        },
+        {
+          "date": "2025-08-13",
+          "slots": [
+            {
+              "time": "10:00-10:30",
+              "available": true
+            },
+            {
+              "time": "10:30-11:00",
+              "available": true
+            },
+            {
+              "time": "11:00-11:30",
+              "available": true
+            },
+            {
+              "time": "11:30-12:00",
+              "available": true
+            },
+            {
+              "time": "12:00-12:30",
+              "available": true
+            },
+            {
+              "time": "12:30-13:00",
+              "available": true
+            },
+            {
+              "time": "14:00-14:30",
+              "available": true
+            },
+            {
+              "time": "14:30-15:00",
+              "available": true
+            }
+          ]
+        },
+        {
+          "date": "2025-08-14",
+          "slots": [
+            {
+              "time": "10:00-10:30",
+              "available": true
+            },
+            {
+              "time": "10:30-11:00",
+              "available": true
+            },
+            {
+              "time": "11:00-11:30",
+              "available": true
+            },
+            {
+              "time": "11:30-12:00",
+              "available": true
+            },
+            {
+              "time": "12:00-12:30",
+              "available": true
+            },
+            {
+              "time": "12:30-13:00",
+              "available": true
+            },
+            {
+              "time": "14:00-14:30",
+              "available": true
+            },
+            {
+              "time": "14:30-15:00",
+              "available": true
+            }
+          ]
+        },
+        {
+          "date": "2025-08-15",
+          "slots": [
+            {
+              "time": "10:00-10:30",
+              "available": true
+            },
+            {
+              "time": "10:30-11:00",
+              "available": true
+            },
+            {
+              "time": "11:00-11:30",
+              "available": true
+            },
+            {
+              "time": "11:30-12:00",
+              "available": true
+            },
+            {
+              "time": "12:00-12:30",
+              "available": true
+            },
+            {
+              "time": "12:30-13:00",
+              "available": true
+            },
+            {
+              "time": "14:00-14:30",
+              "available": true
+            },
+            {
+              "time": "14:30-15:00",
+              "available": true
+            }
+          ]
+        },
+        {
+          "date": "2025-08-16",
+          "slots": [
+            {
+              "time": "10:00-10:30",
+              "available": true
+            },
+            {
+              "time": "10:30-11:00",
+              "available": true
+            },
+            {
+              "time": "11:00-11:30",
+              "available": true
+            },
+            {
+              "time": "11:30-12:00",
+              "available": true
+            },
+            {
+              "time": "12:00-12:30",
+              "available": true
+            },
+            {
+              "time": "12:30-13:00",
+              "available": true
+            },
+            {
+              "time": "14:00-14:30",
+              "available": true
+            },
+            {
+              "time": "14:30-15:00",
+              "available": true
+            }
+          ]
+        },
+        {
+          "date": "2025-08-17",
+          "slots": [
+            {
+              "time": "10:00-10:30",
+              "available": true
+            },
+            {
+              "time": "10:30-11:00",
+              "available": true
+            },
+            {
+              "time": "11:00-11:30",
+              "available": true
+            },
+            {
+              "time": "11:30-12:00",
+              "available": true
+            },
+            {
+              "time": "12:00-12:30",
+              "available": true
+            },
+            {
+              "time": "12:30-13:00",
+              "available": true
+            },
+            {
+              "time": "14:00-14:30",
+              "available": true
+            },
+            {
+              "time": "14:30-15:00",
+              "available": true
+            }
+          ]
+        },
+        {
+          "date": "2025-08-18",
+          "slots": [
+            {
+              "time": "10:00-10:30",
+              "available": true
+            },
+            {
+              "time": "10:30-11:00",
+              "available": true
+            },
+            {
+              "time": "11:00-11:30",
+              "available": true
+            },
+            {
+              "time": "11:30-12:00",
+              "available": true
+            },
+            {
+              "time": "12:00-12:30",
+              "available": true
+            },
+            {
+              "time": "12:30-13:00",
+              "available": true
+            },
+            {
+              "time": "14:00-14:30",
+              "available": true
+            },
+            {
+              "time": "14:30-15:00",
+              "available": true
+            }
+          ]
+        },
+        {
+          "date": "2025-08-19",
+          "slots": [
+            {
+              "time": "10:00-10:30",
+              "available": true
+            },
+            {
+              "time": "10:30-11:00",
+              "available": true
+            },
+            {
+              "time": "11:00-11:30",
+              "available": true
+            },
+            {
+              "time": "11:30-12:00",
+              "available": true
+            },
+            {
+              "time": "12:00-12:30",
+              "available": true
+            },
+            {
+              "time": "12:30-13:00",
+              "available": true
+            },
+            {
+              "time": "14:00-14:30",
+              "available": true
+            },
+            {
+              "time": "14:30-15:00",
+              "available": true
+            }
+          ]
+        },
+        {
+          "date": "2025-08-20",
+          "slots": [
+            {
+              "time": "10:00-10:30",
+              "available": true
+            },
+            {
+              "time": "10:30-11:00",
+              "available": true
+            },
+            {
+              "time": "11:00-11:30",
+              "available": true
+            },
+            {
+              "time": "11:30-12:00",
+              "available": true
+            },
+            {
+              "time": "12:00-12:30",
+              "available": true
+            },
+            {
+              "time": "12:30-13:00",
+              "available": true
+            },
+            {
+              "time": "14:00-14:30",
+              "available": true
+            },
+            {
+              "time": "14:30-15:00",
+              "available": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Dr. Devansh",
+      "department": "Neurology",
+      "schedule": [
+        {
+          "day": "Monday",
+          "date": "2025-07-22",
+          "year": 2025,
+          "slots": [
+            {
+              "time": "10:00-10:30",
+              "available": true
+            },
+            {
+              "time": "10:30-11:00",
+              "available": true
+            },
+            {
+              "time": "11:00-11:30",
+              "available": true
+            },
+            {
+              "time": "11:30-12:00",
+              "available": true
+            },
+            {
+              "time": "12:00-12:30",
+              "available": true
+            },
+            {
+              "time": "12:30-13:00",
+              "available": true
+            },
+            {
+              "time": "14:00-14:30",
+              "available": true
+            },
+            {
+              "time": "14:30-15:00",
+              "available": true
+            },
+            {
+              "time": "15:00-15:30",
+              "available": true
+            },
+            {
+              "time": "15:30-16:00",
+              "available": true
+            },
+            {
+              "time": "16:00-16:30",
+              "available": true
+            },
+            {
+              "time": "16:30-17:00",
+              "available": true
+            }
+          ]
+        },
+        {
+          "day": "Tuesday",
+          "date": "2025-07-23",
+          "year": 2025,
+          "slots": [
+            {
+              "time": "10:00-10:30",
+              "available": true
+            },
+            {
+              "time": "10:30-11:00",
+              "available": true
+            },
+            {
+              "time": "11:00-11:30",
+              "available": true
+            },
+            {
+              "time": "11:30-12:00",
+              "available": true
+            },
+            {
+              "time": "12:00-12:30",
+              "available": true
+            },
+            {
+              "time": "12:30-13:00",
+              "available": true
+            },
+            {
+              "time": "14:00-14:30",
+              "available": true
+            },
+            {
+              "time": "14:30-15:00",
+              "available": true
+            },
+            {
+              "time": "15:00-15:30",
+              "available": true
+            },
+            {
+              "time": "15:30-16:00",
+              "available": true
+            },
+            {
+              "time": "16:00-16:30",
+              "available": true
+            },
+            {
+              "time": "16:30-17:00",
+              "available": true
+            }
+          ]
+        },
+        {
+          "day": "Wednesday",
+          "date": "2025-07-24",
+          "year": 2025,
+          "slots": [
+            {
+              "time": "10:00-10:30",
+              "available": true
+            },
+            {
+              "time": "10:30-11:00",
+              "available": true
+            },
+            {
+              "time": "11:00-11:30",
+              "available": true
+            },
+            {
+              "time": "11:30-12:00",
+              "available": true
+            },
+            {
+              "time": "12:00-12:30",
+              "available": true
+            },
+            {
+              "time": "12:30-13:00",
+              "available": true
+            },
+            {
+              "time": "14:00-14:30",
+              "available": true
+            },
+            {
+              "time": "14:30-15:00",
+              "available": true
+            },
+            {
+              "time": "15:00-15:30",
+              "available": true
+            },
+            {
+              "time": "15:30-16:00",
+              "available": true
+            },
+            {
+              "time": "16:00-16:30",
+              "available": true
+            },
+            {
+              "time": "16:30-17:00",
+              "available": true
+            }
+          ]
+        },
+        {
+          "day": "Thursday",
+          "date": "2025-07-25",
+          "year": 2025,
+          "slots": [
+            {
+              "time": "10:00-10:30",
+              "available": true
+            },
+            {
+              "time": "10:30-11:00",
+              "available": true
+            },
+            {
+              "time": "11:00-11:30",
+              "available": true
+            },
+            {
+              "time": "11:30-12:00",
+              "available": true
+            },
+            {
+              "time": "12:00-12:30",
+              "available": true
+            },
+            {
+              "time": "12:30-13:00",
+              "available": true
+            },
+            {
+              "time": "14:00-14:30",
+              "available": true
+            },
+            {
+              "time": "14:30-15:00",
+              "available": true
+            },
+            {
+              "time": "15:00-15:30",
+              "available": true
+            },
+            {
+              "time": "15:30-16:00",
+              "available": true
+            },
+            {
+              "time": "16:00-16:30",
+              "available": true
+            },
+            {
+              "time": "16:30-17:00",
+              "available": true
+            }
+          ]
+        },
+        {
+          "day": "Friday",
+          "date": "2025-07-26",
+          "year": 2025,
+          "slots": [
+            {
+              "time": "10:00-10:30",
+              "available": true
+            },
+            {
+              "time": "10:30-11:00",
+              "available": true
+            },
+            {
+              "time": "11:00-11:30",
+              "available": true
+            },
+            {
+              "time": "11:30-12:00",
+              "available": true
+            },
+            {
+              "time": "12:00-12:30",
+              "available": true
+            },
+            {
+              "time": "12:30-13:00",
+              "available": true
+            },
+            {
+              "time": "14:00-14:30",
+              "available": true
+            },
+            {
+              "time": "14:30-15:00",
+              "available": true
+            },
+            {
+              "time": "15:00-15:30",
+              "available": true
+            },
+            {
+              "time": "15:30-16:00",
+              "available": true
+            },
+            {
+              "time": "16:00-16:30",
+              "available": true
+            },
+            {
+              "time": "16:30-17:00",
+              "available": true
+            }
+          ]
+        },
+        {
+          "day": "Saturday",
+          "date": "2025-07-27",
+          "year": 2025,
+          "slots": [
+            {
+              "time": "10:00-10:30",
+              "available": true
+            },
+            {
+              "time": "10:30-11:00",
+              "available": true
+            },
+            {
+              "time": "11:00-11:30",
+              "available": true
+            },
+            {
+              "time": "11:30-12:00",
+              "available": true
+            },
+            {
+              "time": "12:00-12:30",
+              "available": true
+            },
+            {
+              "time": "12:30-13:00",
+              "available": true
+            },
+            {
+              "time": "14:00-14:30",
+              "available": true
+            },
+            {
+              "time": "14:30-15:00",
+              "available": true
+            },
+            {
+              "time": "15:00-15:30",
+              "available": true
+            },
+            {
+              "time": "15:30-16:00",
+              "available": true
+            },
+            {
+              "time": "16:00-16:30",
+              "available": true
+            },
+            {
+              "time": "16:30-17:00",
+              "available": true
+            }
+          ]
+        },
+        {
+          "date": "2025-07-28",
+          "slots": [
+            {
+              "time": "10:00-10:30",
+              "available": true
+            },
+            {
+              "time": "10:30-11:00",
+              "available": true
+            },
+            {
+              "time": "11:00-11:30",
+              "available": true
+            },
+            {
+              "time": "11:30-12:00",
+              "available": true
+            },
+            {
+              "time": "12:00-12:30",
+              "available": true
+            },
+            {
+              "time": "12:30-13:00",
+              "available": true
+            },
+            {
+              "time": "14:00-14:30",
+              "available": true
+            },
+            {
+              "time": "14:30-15:00",
+              "available": true
+            }
+          ]
+        },
+        {
+          "date": "2025-07-29",
+          "slots": [
+            {
+              "time": "10:00-10:30",
+              "available": true
+            },
+            {
+              "time": "10:30-11:00",
+              "available": true
+            },
+            {
+              "time": "11:00-11:30",
+              "available": true
+            },
+            {
+              "time": "11:30-12:00",
+              "available": true
+            },
+            {
+              "time": "12:00-12:30",
+              "available": true
+            },
+            {
+              "time": "12:30-13:00",
+              "available": true
+            },
+            {
+              "time": "14:00-14:30",
+              "available": true
+            },
+            {
+              "time": "14:30-15:00",
+              "available": true
+            }
+          ]
+        },
+        {
+          "date": "2025-07-30",
+          "slots": [
+            {
+              "time": "10:00-10:30",
+              "available": true
+            },
+            {
+              "time": "10:30-11:00",
+              "available": true
+            },
+            {
+              "time": "11:00-11:30",
+              "available": true
+            },
+            {
+              "time": "11:30-12:00",
+              "available": true
+            },
+            {
+              "time": "12:00-12:30",
+              "available": true
+            },
+            {
+              "time": "12:30-13:00",
+              "available": true
+            },
+            {
+              "time": "14:00-14:30",
+              "available": true
+            },
+            {
+              "time": "14:30-15:00",
+              "available": true
+            }
+          ]
+        },
+        {
+          "date": "2025-07-31",
+          "slots": [
+            {
+              "time": "10:00-10:30",
+              "available": true
+            },
+            {
+              "time": "10:30-11:00",
+              "available": true
+            },
+            {
+              "time": "11:00-11:30",
+              "available": true
+            },
+            {
+              "time": "11:30-12:00",
+              "available": true
+            },
+            {
+              "time": "12:00-12:30",
+              "available": true
+            },
+            {
+              "time": "12:30-13:00",
+              "available": true
+            },
+            {
+              "time": "14:00-14:30",
+              "available": true
+            },
+            {
+              "time": "14:30-15:00",
+              "available": true
+            }
+          ]
+        },
+        {
+          "date": "2025-08-01",
+          "slots": [
+            {
+              "time": "10:00-10:30",
+              "available": true
+            },
+            {
+              "time": "10:30-11:00",
+              "available": true
+            },
+            {
+              "time": "11:00-11:30",
+              "available": true
+            },
+            {
+              "time": "11:30-12:00",
+              "available": true
+            },
+            {
+              "time": "12:00-12:30",
+              "available": true
+            },
+            {
+              "time": "12:30-13:00",
+              "available": true
+            },
+            {
+              "time": "14:00-14:30",
+              "available": true
+            },
+            {
+              "time": "14:30-15:00",
+              "available": true
+            }
+          ]
+        },
+        {
+          "date": "2025-08-02",
+          "slots": [
+            {
+              "time": "10:00-10:30",
+              "available": true
+            },
+            {
+              "time": "10:30-11:00",
+              "available": true
+            },
+            {
+              "time": "11:00-11:30",
+              "available": true
+            },
+            {
+              "time": "11:30-12:00",
+              "available": true
+            },
+            {
+              "time": "12:00-12:30",
+              "available": true
+            },
+            {
+              "time": "12:30-13:00",
+              "available": true
+            },
+            {
+              "time": "14:00-14:30",
+              "available": true
+            },
+            {
+              "time": "14:30-15:00",
+              "available": true
+            }
+          ]
+        },
+        {
+          "date": "2025-08-03",
+          "slots": [
+            {
+              "time": "10:00-10:30",
+              "available": true
+            },
+            {
+              "time": "10:30-11:00",
+              "available": true
+            },
+            {
+              "time": "11:00-11:30",
+              "available": true
+            },
+            {
+              "time": "11:30-12:00",
+              "available": true
+            },
+            {
+              "time": "12:00-12:30",
+              "available": true
+            },
+            {
+              "time": "12:30-13:00",
+              "available": true
+            },
+            {
+              "time": "14:00-14:30",
+              "available": true
+            },
+            {
+              "time": "14:30-15:00",
+              "available": true
+            }
+          ]
+        },
+        {
+          "date": "2025-08-04",
+          "slots": [
+            {
+              "time": "10:00-10:30",
+              "available": true
+            },
+            {
+              "time": "10:30-11:00",
+              "available": true
+            },
+            {
+              "time": "11:00-11:30",
+              "available": true
+            },
+            {
+              "time": "11:30-12:00",
+              "available": true
+            },
+            {
+              "time": "12:00-12:30",
+              "available": true
+            },
+            {
+              "time": "12:30-13:00",
+              "available": true
+            },
+            {
+              "time": "14:00-14:30",
+              "available": true
+            },
+            {
+              "time": "14:30-15:00",
+              "available": true
+            }
+          ]
+        },
+        {
+          "date": "2025-08-05",
+          "slots": [
+            {
+              "time": "10:00-10:30",
+              "available": true
+            },
+            {
+              "time": "10:30-11:00",
+              "available": true
+            },
+            {
+              "time": "11:00-11:30",
+              "available": true
+            },
+            {
+              "time": "11:30-12:00",
+              "available": true
+            },
+            {
+              "time": "12:00-12:30",
+              "available": true
+            },
+            {
+              "time": "12:30-13:00",
+              "available": true
+            },
+            {
+              "time": "14:00-14:30",
+              "available": true
+            },
+            {
+              "time": "14:30-15:00",
+              "available": true
+            }
+          ]
+        },
+        {
+          "date": "2025-08-06",
+          "slots": [
+            {
+              "time": "10:00-10:30",
+              "available": true
+            },
+            {
+              "time": "10:30-11:00",
+              "available": true
+            },
+            {
+              "time": "11:00-11:30",
+              "available": true
+            },
+            {
+              "time": "11:30-12:00",
+              "available": true
+            },
+            {
+              "time": "12:00-12:30",
+              "available": true
+            },
+            {
+              "time": "12:30-13:00",
+              "available": true
+            },
+            {
+              "time": "14:00-14:30",
+              "available": true
+            },
+            {
+              "time": "14:30-15:00",
+              "available": true
+            }
+          ]
+        },
+        {
+          "date": "2025-08-07",
+          "slots": [
+            {
+              "time": "10:00-10:30",
+              "available": true
+            },
+            {
+              "time": "10:30-11:00",
+              "available": true
+            },
+            {
+              "time": "11:00-11:30",
+              "available": true
+            },
+            {
+              "time": "11:30-12:00",
+              "available": true
+            },
+            {
+              "time": "12:00-12:30",
+              "available": true
+            },
+            {
+              "time": "12:30-13:00",
+              "available": true
+            },
+            {
+              "time": "14:00-14:30",
+              "available": true
+            },
+            {
+              "time": "14:30-15:00",
+              "available": true
+            }
+          ]
+        },
+        {
+          "date": "2025-08-08",
+          "slots": [
+            {
+              "time": "10:00-10:30",
+              "available": true
+            },
+            {
+              "time": "10:30-11:00",
+              "available": true
+            },
+            {
+              "time": "11:00-11:30",
+              "available": true
+            },
+            {
+              "time": "11:30-12:00",
+              "available": true
+            },
+            {
+              "time": "12:00-12:30",
+              "available": true
+            },
+            {
+              "time": "12:30-13:00",
+              "available": true
+            },
+            {
+              "time": "14:00-14:30",
+              "available": true
+            },
+            {
+              "time": "14:30-15:00",
+              "available": true
+            }
+          ]
+        },
+        {
+          "date": "2025-08-09",
+          "slots": [
+            {
+              "time": "10:00-10:30",
+              "available": true
+            },
+            {
+              "time": "10:30-11:00",
+              "available": true
+            },
+            {
+              "time": "11:00-11:30",
+              "available": true
+            },
+            {
+              "time": "11:30-12:00",
+              "available": true
+            },
+            {
+              "time": "12:00-12:30",
+              "available": true
+            },
+            {
+              "time": "12:30-13:00",
+              "available": true
+            },
+            {
+              "time": "14:00-14:30",
+              "available": true
+            },
+            {
+              "time": "14:30-15:00",
+              "available": true
+            }
+          ]
+        },
+        {
+          "date": "2025-08-10",
+          "slots": [
+            {
+              "time": "10:00-10:30",
+              "available": true
+            },
+            {
+              "time": "10:30-11:00",
+              "available": true
+            },
+            {
+              "time": "11:00-11:30",
+              "available": true
+            },
+            {
+              "time": "11:30-12:00",
+              "available": true
+            },
+            {
+              "time": "12:00-12:30",
+              "available": true
+            },
+            {
+              "time": "12:30-13:00",
+              "available": true
+            },
+            {
+              "time": "14:00-14:30",
+              "available": true
+            },
+            {
+              "time": "14:30-15:00",
+              "available": true
+            }
+          ]
+        },
+        {
+          "date": "2025-08-11",
+          "slots": [
+            {
+              "time": "10:00-10:30",
+              "available": true
+            },
+            {
+              "time": "10:30-11:00",
+              "available": true
+            },
+            {
+              "time": "11:00-11:30",
+              "available": true
+            },
+            {
+              "time": "11:30-12:00",
+              "available": true
+            },
+            {
+              "time": "12:00-12:30",
+              "available": true
+            },
+            {
+              "time": "12:30-13:00",
+              "available": true
+            },
+            {
+              "time": "14:00-14:30",
+              "available": true
+            },
+            {
+              "time": "14:30-15:00",
+              "available": true
+            }
+          ]
+        },
+        {
+          "date": "2025-08-12",
+          "slots": [
+            {
+              "time": "10:00-10:30",
+              "available": true
+            },
+            {
+              "time": "10:30-11:00",
+              "available": true
+            },
+            {
+              "time": "11:00-11:30",
+              "available": true
+            },
+            {
+              "time": "11:30-12:00",
+              "available": true
+            },
+            {
+              "time": "12:00-12:30",
+              "available": true
+            },
+            {
+              "time": "12:30-13:00",
+              "available": true
+            },
+            {
+              "time": "14:00-14:30",
+              "available": true
+            },
+            {
+              "time": "14:30-15:00",
+              "available": true
+            }
+          ]
+        },
+        {
+          "date": "2025-08-13",
+          "slots": [
+            {
+              "time": "10:00-10:30",
+              "available": true
+            },
+            {
+              "time": "10:30-11:00",
+              "available": true
+            },
+            {
+              "time": "11:00-11:30",
+              "available": true
+            },
+            {
+              "time": "11:30-12:00",
+              "available": true
+            },
+            {
+              "time": "12:00-12:30",
+              "available": true
+            },
+            {
+              "time": "12:30-13:00",
+              "available": true
+            },
+            {
+              "time": "14:00-14:30",
+              "available": true
+            },
+            {
+              "time": "14:30-15:00",
+              "available": true
+            }
+          ]
+        },
+        {
+          "date": "2025-08-14",
+          "slots": [
+            {
+              "time": "10:00-10:30",
+              "available": true
+            },
+            {
+              "time": "10:30-11:00",
+              "available": true
+            },
+            {
+              "time": "11:00-11:30",
+              "available": true
+            },
+            {
+              "time": "11:30-12:00",
+              "available": true
+            },
+            {
+              "time": "12:00-12:30",
+              "available": true
+            },
+            {
+              "time": "12:30-13:00",
+              "available": true
+            },
+            {
+              "time": "14:00-14:30",
+              "available": true
+            },
+            {
+              "time": "14:30-15:00",
+              "available": true
+            }
+          ]
+        },
+        {
+          "date": "2025-08-15",
+          "slots": [
+            {
+              "time": "10:00-10:30",
+              "available": true
+            },
+            {
+              "time": "10:30-11:00",
+              "available": true
+            },
+            {
+              "time": "11:00-11:30",
+              "available": true
+            },
+            {
+              "time": "11:30-12:00",
+              "available": true
+            },
+            {
+              "time": "12:00-12:30",
+              "available": true
+            },
+            {
+              "time": "12:30-13:00",
+              "available": true
+            },
+            {
+              "time": "14:00-14:30",
+              "available": true
+            },
+            {
+              "time": "14:30-15:00",
+              "available": true
+            }
+          ]
+        },
+        {
+          "date": "2025-08-16",
+          "slots": [
+            {
+              "time": "10:00-10:30",
+              "available": true
+            },
+            {
+              "time": "10:30-11:00",
+              "available": true
+            },
+            {
+              "time": "11:00-11:30",
+              "available": true
+            },
+            {
+              "time": "11:30-12:00",
+              "available": true
+            },
+            {
+              "time": "12:00-12:30",
+              "available": true
+            },
+            {
+              "time": "12:30-13:00",
+              "available": true
+            },
+            {
+              "time": "14:00-14:30",
+              "available": true
+            },
+            {
+              "time": "14:30-15:00",
+              "available": true
+            }
+          ]
+        },
+        {
+          "date": "2025-08-17",
+          "slots": [
+            {
+              "time": "10:00-10:30",
+              "available": true
+            },
+            {
+              "time": "10:30-11:00",
+              "available": true
+            },
+            {
+              "time": "11:00-11:30",
+              "available": true
+            },
+            {
+              "time": "11:30-12:00",
+              "available": true
+            },
+            {
+              "time": "12:00-12:30",
+              "available": true
+            },
+            {
+              "time": "12:30-13:00",
+              "available": true
+            },
+            {
+              "time": "14:00-14:30",
+              "available": true
+            },
+            {
+              "time": "14:30-15:00",
+              "available": true
+            }
+          ]
+        },
+        {
+          "date": "2025-08-18",
+          "slots": [
+            {
+              "time": "10:00-10:30",
+              "available": true
+            },
+            {
+              "time": "10:30-11:00",
+              "available": true
+            },
+            {
+              "time": "11:00-11:30",
+              "available": true
+            },
+            {
+              "time": "11:30-12:00",
+              "available": true
+            },
+            {
+              "time": "12:00-12:30",
+              "available": true
+            },
+            {
+              "time": "12:30-13:00",
+              "available": true
+            },
+            {
+              "time": "14:00-14:30",
+              "available": true
+            },
+            {
+              "time": "14:30-15:00",
+              "available": true
+            }
+          ]
+        },
+        {
+          "date": "2025-08-19",
+          "slots": [
+            {
+              "time": "10:00-10:30",
+              "available": true
+            },
+            {
+              "time": "10:30-11:00",
+              "available": true
+            },
+            {
+              "time": "11:00-11:30",
+              "available": true
+            },
+            {
+              "time": "11:30-12:00",
+              "available": true
+            },
+            {
+              "time": "12:00-12:30",
+              "available": true
+            },
+            {
+              "time": "12:30-13:00",
+              "available": true
+            },
+            {
+              "time": "14:00-14:30",
+              "available": true
+            },
+            {
+              "time": "14:30-15:00",
+              "available": true
+            }
+          ]
+        },
+        {
+          "date": "2025-08-20",
+          "slots": [
+            {
+              "time": "10:00-10:30",
+              "available": true
+            },
+            {
+              "time": "10:30-11:00",
+              "available": true
+            },
+            {
+              "time": "11:00-11:30",
+              "available": true
+            },
+            {
+              "time": "11:30-12:00",
+              "available": true
+            },
+            {
+              "time": "12:00-12:30",
+              "available": true
+            },
+            {
+              "time": "12:30-13:00",
+              "available": true
+            },
+            {
+              "time": "14:00-14:30",
+              "available": true
+            },
+            {
+              "time": "14:30-15:00",
+              "available": true
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

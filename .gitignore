@@ -67,7 +67,6 @@ instance/
 
 # PDF and data
 *.pdf
-*.json
 
 # Ignore zipped files
 *.zip 
