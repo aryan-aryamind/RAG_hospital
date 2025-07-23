@@ -87,7 +87,7 @@ def voice_webhook():
         logger.info(f"Incoming call from {from_number} to {to_number} (SID: {call_sid})")
         
         # Welcome message
-        response.say("Hello, I am Arya an AI Voice Assitant! Welcome to Shalby Hospital.",
+        response.say("Hello, I am Arya an AI Voice Assistant! Welcome to Shalby Hospital.",
         )
         
         # Main menu
@@ -174,6 +174,22 @@ def best_match_department(user_text, departments, threshold=60):
     logger.info(f"No fuzzy department match for: '{user_text}'")
     return None
 
+def extract_any_date(text):
+    # Use non-capturing groups in regex
+    date_candidates = re.findall(r'\d{1,2}(?:st|nd|rd|th)?\s*(?:of)?\s*[A-Za-z]+|\d{1,2}[/-]\d{1,2}[/-]\d{2,4}', text)
+    for candidate in date_candidates:
+        if not isinstance(candidate, str):
+            candidate = ' '.join(candidate)  # flatten tuple if needed
+        parsed = dateparser.parse(candidate)
+        if parsed:
+            return parsed.strftime('%Y-%m-%d')
+    # Fallback to whole text
+    parsed = dateparser.parse(text)
+    if parsed:
+        return parsed.strftime('%Y-%m-%d')
+    return None
+
+# --- In /server-rag, add lab test booking intent detection and redirect ---
 @app.route('/server-rag',methods=['POST'])
 def server_rag():
     rag_question = request.values.get('SpeechResult', '')
@@ -181,6 +197,24 @@ def server_rag():
 
     resp = VoiceResponse()
 
+    # --- Lab test booking intent detection ---
+    lab_keywords = ['lab test', 'book lab test', 'blood test', 'health checkup', 'scan', 'package']
+    test_names = get_lab_test_names()
+    if any(kw in rag_question.lower() for kw in lab_keywords) or any(test.lower() in rag_question.lower() for test in test_names):
+        test_list = ', '.join(test_names)
+        # Speak the available lab tests before prompting
+        resp.say(f"We have the following lab tests available: {test_list}. Which one would you like to book?")
+        gather = Gather(input='speech', action='/collect-lab-test', method='POST', barge_in=True, timeout=10)
+        gather.say("Please say the test name you want to book.")
+        resp.append(gather)
+        gather2 = Gather(input='speech', action='/collect-lab-test', method='POST', barge_in=True, timeout=8)
+        gather2.say("Are you still there? Please say the lab test name.")
+        resp.append(gather2)
+        resp.say("We didn't receive any input. Thank you for calling. Goodbye!")
+        resp.hangup()
+        return str(resp)
+
+    # --- Existing doctor appointment logic ---
     if 'book' in rag_question.lower() and 'appointment' in rag_question.lower():
         # Try to parse all details from the utterance
         department, date, time = parse_booking_request(rag_question)
@@ -376,15 +410,17 @@ def get_available_slots_for_department_and_date(department, date):
             slot_end_time = current_time + timedelta(minutes=30)
             slot_str = f"{slot_start_time.strftime('%H:%M')}-{slot_end_time.strftime('%H:%M')}"
             is_in_lunch = lunch_start_dt and lunch_start_dt <= slot_start_time < lunch_end_dt
-            is_booked = (doc_name, slot_str) in booked_slots_for_date
-            if not is_in_lunch and not is_booked:
+            is_booked_json = (doc_name, slot_str) in booked_slots_for_date
+            is_booked_db = is_slot_booked(doc_name, date, slot_str)
+            if not is_in_lunch and not is_booked_json and not is_booked_db:
                 all_available_slots.append({'doctor': doc_name, 'time': slot_str})
             current_time += timedelta(minutes=30)
     all_available_slots.sort(key=lambda x: (x['time'], x['doctor']))
     return all_available_slots
 
 def is_slot_booked(doctor, date, time):
-    """Check if a slot is already in bookings.json."""
+    """Check if a slot is already in bookings.json or the DB."""
+    # Check in bookings.json
     try:
         with open('bookings.json', 'r', encoding='utf-8') as f:
             bookings = json.load(f)
@@ -394,7 +430,22 @@ def is_slot_booked(doctor, date, time):
                     booking.get('time') == time):
                     return True
     except (FileNotFoundError, json.JSONDecodeError):
-        return False
+        pass
+    # Check in PostgreSQL
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute(
+            """SELECT 1 FROM bookings WHERE doctor=%s AND date=%s AND time=%s LIMIT 1""",
+            (doctor, date, time)
+        )
+        exists = cur.fetchone() is not None
+        cur.close()
+        conn.close()
+        if exists:
+            return True
+    except Exception as e:
+        logger.error(f"Error checking slot in DB: {e}")
     return False
 
 def get_db_connection():
@@ -407,17 +458,24 @@ def get_db_connection():
         port=os.environ.get('PG_PORT', 5432)
     )
 
+# NOTE: Ensure you run this SQL in your DB:
+# ALTER TABLE bookings ADD CONSTRAINT unique_doctor_slot UNIQUE (doctor, date, time);
 def insert_booking(department, doctor, date, time, name, mobile):
     conn = get_db_connection()
     cur = conn.cursor()
-    cur.execute(
-        """INSERT INTO bookings (department, doctor, date, time, name, mobile)
-        VALUES (%s, %s, %s, %s, %s, %s)""",
-        (department, doctor, date, time, name, mobile)
-    )
-    conn.commit()
-    cur.close()
-    conn.close()
+    try:
+        cur.execute(
+            """INSERT INTO bookings (department, doctor, date, time, name, mobile)
+            VALUES (%s, %s, %s, %s, %s, %s)""",
+            (department, doctor, date, time, name, mobile)
+        )
+        conn.commit()
+    except psycopg2.errors.UniqueViolation:
+        conn.rollback()
+        raise Exception("Slot already booked")
+    finally:
+        cur.close()
+        conn.close()
 
 @app.route('/collect-department', methods=['POST'])
 def collect_department():
@@ -500,7 +558,7 @@ def collect_date():
     session = user_sessions.get(call_sid, {})
     date_text = request.values.get('SpeechResult', '')
     logger.info(f"User said date: {date_text}")
-    date = extract_date(date_text)
+    date = extract_any_date(date_text)
     if not date:
         parsed = dateparser.parse(date_text)
         if parsed:
@@ -565,76 +623,92 @@ def collect_time():
     call_sid = request.values.get('CallSid')
     session = user_sessions.get(call_sid, {})
     time_text = request.values.get('SpeechResult', '')
+    logger.info(f"/collect-time: User input: {time_text}, Session: {session}")
+    # DO NOT extract or update date here!
     department = session.get('department')
     date = session.get('date')
+    logger.info(f"/collect-time: Using department: {department}, date: {date}")
     available_slots = get_available_slots_for_department_and_date(department, date)
+    # Only allow times that are not already booked
+    valid_times = [slot['time'] for slot in available_slots]
     # Try to extract a valid slot from user input
     time_val = extract_time(time_text)
-    matched_slot = None
-    for slot in available_slots:
-        slot_start, _ = slot['time'].split('-')
-        if time_val == slot_start:
-            matched_slot = slot
-            break
-    if not matched_slot:
-        # fallback to dateparser
-        from datetime import datetime
-        parsed = dateparser.parse(time_text)
-        if parsed:
-            for slot in available_slots:
-                slot_start, _ = slot['time'].split('-')
-                if parsed.strftime('%H:%M') == slot_start:
-                    matched_slot = slot
-                    break
-    # If still not found, suggest the next available slot
-    if not matched_slot and time_val:
-        # Find the next available slot after the requested time
-        from datetime import datetime, timedelta
+    matched_slots = [slot for slot in available_slots if slot['time'].split('-')[0] == time_val]
+    from datetime import datetime
+    # If user requested a time and at least one doctor is available at that time
+    if time_val and matched_slots:
+        slot = matched_slots[0]
+        session['time'] = slot['time']
+        session['doctor'] = slot['doctor']
+        user_sessions[call_sid] = session
+        resp = VoiceResponse()
+        gather = Gather(input='speech', action='/confirm-datetime', method='POST', timeout=12)
+        gather.say(f"{slot['doctor']} is available in {department} on {date} at {slot['time']}. Would you like to book with {slot['doctor']}? Please say yes or no.")
+        resp.append(gather)
+        return str(resp)
+    # If user requested a time but no doctor is available at that time, suggest next available slot after requested time
+    if time_val and not matched_slots:
         try:
             t = datetime.strptime(time_val, '%H:%M')
         except Exception:
             t = None
         next_slot = None
-        min_diff = timedelta(hours=24)
+        min_diff = None
         for slot in available_slots:
             slot_start, _ = slot['time'].split('-')
             slot_time = datetime.strptime(slot_start, '%H:%M')
-            if t and slot_time >= t:
-                diff = slot_time - t
-                if diff < min_diff:
+            if t and slot_time > t:
+                diff = (slot_time - t).total_seconds()
+                if min_diff is None or diff < min_diff:
                     min_diff = diff
                     next_slot = slot
+        resp = VoiceResponse()
         if next_slot:
-            resp = VoiceResponse()
-            gather = Gather(input='speech', action='/confirm-datetime', method='POST', timeout=10)
-            gather.say(f"The closest available slot is at {next_slot['time']} with {next_slot['doctor']}. Do you want to book this slot? Please say yes or no.")
+            gather = Gather(input='speech', action='/confirm-datetime', method='POST', timeout=12)
+            gather.say(f"Sorry, that slot is already booked for all doctors. The next available slot is at {next_slot['time']} with {next_slot['doctor']}. Would you like to book this slot? Please say yes or no.")
             session['time'] = next_slot['time']
             session['doctor'] = next_slot['doctor']
             user_sessions[call_sid] = session
             resp.append(gather)
             return str(resp)
-    if matched_slot:
-        session['time'] = matched_slot['time']
-        session['doctor'] = matched_slot['doctor']
+        else:
+            if available_slots:
+                earliest_slot = available_slots[0]
+                gather = Gather(input='speech', action='/confirm-datetime', method='POST', timeout=12)
+                gather.say(f"Sorry, no doctors are available at that time or later. The earliest available slot is at {earliest_slot['time']} with {earliest_slot['doctor']}. Would you like to book this slot? Please say yes or no.")
+                session['time'] = earliest_slot['time']
+                session['doctor'] = earliest_slot['doctor']
+                user_sessions[call_sid] = session
+                resp.append(gather)
+                return str(resp)
+            else:
+                gather = Gather(input='speech', action='/collect-time', method='POST', timeout=12)
+                gather.say("Sorry, no doctors are available at any time today. Please try another day.")
+                resp.append(gather)
+                return str(resp)
+    if not time_val and available_slots:
+        slot = available_slots[0]
+        session['time'] = slot['time']
+        session['doctor'] = slot['doctor']
         user_sessions[call_sid] = session
         resp = VoiceResponse()
-        gather = Gather(input='speech', action='/confirm-datetime', method='POST', timeout=10)
-        gather.say(f"You want to book an appointment in {department} on {date} at {matched_slot['time']} with {matched_slot['doctor']}. Is this correct? Please say yes or no.")
+        gather = Gather(input='speech', action='/confirm-datetime', method='POST', timeout=12)
+        gather.say(f"The closest available slot is at {slot['time']} with {slot['doctor']}. Would you like to book this slot? Please say yes or no.")
         resp.append(gather)
         return str(resp)
-    else:
-        resp = VoiceResponse()
-        slot_list = ', '.join([f"{slot['time']} with {slot['doctor']}" for slot in available_slots]) if available_slots else 'No slots available.'
-        gather = Gather(input='speech', action='/collect-time', method='POST', timeout=10)
-        gather.say(f"Sorry, available times for this department are: {slot_list}. Please say a valid time.")
-        resp.append(gather)
-        return str(resp)
+    resp = VoiceResponse()
+    slot_list = ', '.join([f"{slot['time']} with {slot['doctor']}" for slot in available_slots]) if available_slots else 'No slots available.'
+    gather = Gather(input='speech', action='/collect-time', method='POST', timeout=12)
+    gather.say(f"Sorry, available times for this department are: {slot_list}. Please say a valid time.")
+    resp.append(gather)
+    return str(resp)
 
 @app.route('/confirm-datetime', methods=['POST'])
 def confirm_datetime():
     call_sid = request.values.get('CallSid')
     session = user_sessions.get(call_sid, {})
     answer = request.values.get('SpeechResult', '').strip().lower()
+    # DO NOT extract or update date here!
     logger.info(f"/confirm-datetime: User response: {answer}, Session: {session}")
     resp = VoiceResponse()
     department = session.get('department')
@@ -677,10 +751,9 @@ def confirm_datetime():
             resp.append(gather)
             return str(resp)
     elif any(word in answer for word in no_words):
-        agent_msg = f"Okay, let's try again. For which date do you want the appointment in {department}? Please say the date in the format 22 july 2025 or 22-07-2025."
-        logger.info(f"Agent: {agent_msg}")
-        gather = Gather(input='speech', action='/collect-date', method='POST', timeout=12)
-        gather.say(agent_msg)
+        # Instead of restarting, go back to time selection for same department/date
+        gather = Gather(input='speech', action='/collect-time', method='POST', timeout=12)
+        gather.say(f"Okay, let's try another time. Please say the time you want for your appointment in {department} on {date}.")
         resp.append(gather)
         return str(resp)
     else:
@@ -713,6 +786,7 @@ def confirm_booking():
     call_sid = request.values.get('CallSid')
     answer = request.values.get('SpeechResult', '').strip().lower()
     session = user_sessions.get(call_sid, {})
+    # DO NOT extract or update date here!
     logger.info(f"/confirm-booking: User response: {answer}, Session: {session}")
     resp = VoiceResponse()
     yes_words = ['yes', 'yeah', 'yup', 'yep', 'correct', 'right', 'ya', 'sure', 'ok', 'okay']
@@ -727,25 +801,27 @@ def confirm_booking():
         resp.append(gather)
         return str(resp)
     elif any(word in answer for word in no_words):
-        agent_msg = "Okay, thank you for calling. You can try booking another slot if you wish."
-        logger.info(f"Agent: {agent_msg}")
-        resp.say(agent_msg)
-        resp.hangup()
+        # Instead of ending, go back to time selection for same department/date
+        department = session.get('department')
+        date = session.get('date')
+        gather = Gather(input='speech', action='/collect-time', method='POST', timeout=12)
+        gather.say(f"Okay, let's try another time. Please say the time you want for your appointment in {department} on {date}.")
+        resp.append(gather)
         return str(resp)
     else:
         agent_msg1 = "Is the information correct? Please say yes or no."
         agent_msg2 = "Are you there? Can you speak yes or no?"
         logger.info(f"Agent: {agent_msg1}")
-        gather = Gather(input='speech', action='/confirm-booking', method='POST', timeout=12)
+        gather = Gather(input='speech', action='/finalize-booking', method='POST', timeout=12)
         gather.say(agent_msg1)
         resp.append(gather)
         logger.info(f"Agent: {agent_msg2}")
-        gather2 = Gather(input='speech', action='/confirm-booking', method='POST', timeout=12)
+        gather2 = Gather(input='speech', action='/finalize-booking', method='POST', timeout=12)
         gather2.say(agent_msg2)
         resp.append(gather2)
         resp.say("We didn't receive any input. Goodbye!")
         resp.hangup()
-        return str(resp)
+    return str(resp)
 
 @app.route('/collect-name', methods=['POST'])
 def collect_name():
@@ -791,19 +867,7 @@ def confirm_mobile():
     resp = VoiceResponse()
     try:
         if len(digits) == 10:
-            # Send SMS immediately after collecting number
-            sms_msg = (
-                f"We have received your details for appointment booking.\n"
-                f"Doctor: {session.get('doctor','')}\n"
-                f"Department: {session.get('department','')}\n"
-                f"Date: {session.get('date','')}\n"
-                f"Time: {session.get('time','')}\n"
-                f"Name: {session.get('name','')}\n"
-                f"Mobile: {digits}"
-            )
-            send_sms(f"+91{digits}", sms_msg)
-            logger.info(f"/confirm-mobile: Sent confirmation SMS to {digits}")
-            # Read back all details for confirmation
+            # Do NOT send SMS here. Only confirm details and proceed to finalize-booking
             details = (
                 f"You are booking an appointment with {session.get('doctor','')} in {session.get('department','')} on {session.get('date','')} at {session.get('time','')}. "
                 f"Your name is {session.get('name','')} and your mobile number is {digits}. Is this correct? Please say yes or no."
@@ -842,7 +906,42 @@ def finalize_booking():
         if is_slot_booked(doctor, date, time):
             booked = False
         else:
-            booked = True
+            try:
+                insert_booking(department, doctor, date, time, name, digits)
+                logger.info(f"Inserted booking into PostgreSQL for {doctor} on {date} at {time}")
+                # Also append to bookings.json for backup/audit
+                booking_data = {
+                    'department': department,
+                    'doctor': doctor,
+                    'date': date,
+                    'time': time,
+                    'name': name,
+                    'mobile': digits
+                }
+                try:
+                    import os
+                    bookings_file = 'bookings.json'
+                    if os.path.exists(bookings_file):
+                        with open(bookings_file, 'r', encoding='utf-8') as f:
+                            bookings = json.load(f)
+                            if not isinstance(bookings, list):
+                                bookings = []
+                    else:
+                        bookings = []
+                    bookings.append(booking_data)
+                    with open(bookings_file, 'w', encoding='utf-8') as f:
+                        json.dump(bookings, f, indent=2)
+                except Exception as e:
+                    logger.error(f"Error writing to bookings.json: {e}")
+                booked = True
+            except Exception as e:
+                if 'Slot already booked' in str(e):
+                    booked = False
+                else:
+                    logger.error(f"Error inserting booking into DB: {e}")
+                    resp.say("Sorry, there was an error booking your slot. Please try again.")
+                    resp.hangup()
+                    return str(resp)
         log_msg = (
             f"Attempting to book: Doctor={doctor}, Department={department}, "
             f"Date={date}, Time={time}, Name={name}, Mobile={digits}"
@@ -862,23 +961,18 @@ def finalize_booking():
                 send_sms(f"+91{digits}", sms_msg)
             except Exception as e:
                 logger.error(f"Error sending SMS: {e}")
-            # --- Insert booking into PostgreSQL ---
-            try:
-                insert_booking(department, doctor, date, time, name, digits)
-                logger.info(f"Inserted booking into PostgreSQL for {doctor} on {date} at {time}")
-            except Exception as e:
-                logger.error(f"Error inserting booking into DB: {e}")
-            # --- End insert ---
             resp.say(f"Your slot has been booked with {doctor} in {department} on {date} at {time}. Thank you!")
-            gather = Gather(input='speech', action='/post-booking-questions', method='POST', timeout=7)
-            gather.say("Do you have any more questions to ask?")
+            gather = Gather(input='speech', action='/post-booking-options', method='POST', timeout=10)
+            gather.say("Do you have any more questions to ask, or would you like to book another appointment? You can say 'book appointment', 'ask a question', or 'no'.")
             resp.append(gather)
             return str(resp)
         else:
             logger.warning(f"Appointment booking failed: {log_msg}")
             logger.warning(f"Booking failure reason: slot was already booked")
             resp.say("Sorry, the slot was just booked by someone else. Please try again.")
-        resp.hangup()
+        gather = Gather(input='speech', action='/post-booking-options', method='POST', timeout=10)
+        gather.say("Do you have any more questions to ask, or would you like to book another appointment? You can say 'book appointment', 'ask a question', or 'no'.")
+        resp.append(gather)
         return str(resp)
     elif any(word in answer for word in no_words):
         agent_msg = "Let's try again. Please tell me your name for the booking."
@@ -902,27 +996,36 @@ def finalize_booking():
         resp.hangup()
         return str(resp)
 
-@app.route('/post-booking-questions', methods=['POST'])
-def post_booking_questions():
+# --- In /post-booking-options, allow user to say 'book lab test' to start lab test flow ---
+@app.route('/post-booking-options', methods=['POST'])
+def post_booking_options():
     answer = request.values.get('SpeechResult', '').strip().lower()
+    logger.info(f"/post-booking-options: User response: {answer}")
     resp = VoiceResponse()
-    yes_words = ['yes', 'yeah', 'yup', 'yep', 'sure', 'ok', 'okay', 'of course', 'please']
-    no_words = ['no', 'nope', 'nah', 'not', 'none', 'nothing', 'thank you', 'thanks', 'bye']
-    if any(word in answer for word in yes_words):
+    if any(word in answer for word in ['book lab test', 'lab test', 'blood test', 'health checkup', 'scan', 'package']):
+        gather = Gather(input='speech', action='/collect-lab-test', method='POST', timeout=10)
+        gather.say("Which lab test would you like to book? Please say the test name.")
+        resp.append(gather)
+        return str(resp)
+    if any(word in answer for word in ['book', 'appointment', 'another']):
+        gather = Gather(input='speech', action='/collect-department', method='POST', timeout=10)
+        gather.say("Which department do you want to book an appointment in? Please say the department.")
+        resp.append(gather)
+        return str(resp)
+    elif any(word in answer for word in ['question', 'ask', 'info', 'information', 'query']):
         gather = Gather(input='speech', action='/server-rag', method='POST', timeout=10)
         gather.say("Please ask your question now.")
         resp.append(gather)
         return str(resp)
-    elif any(word in answer for word in no_words):
+    elif any(word in answer for word in ['no', 'none', 'nothing', 'bye', 'exit', 'quit', 'thank you', 'thanks']):
         resp.say("Thank you for calling. Have a great day! Goodbye!")
         resp.hangup()
         return str(resp)
     else:
-        gather = Gather(input='speech', action='/post-booking-questions', method='POST', timeout=7)
-        gather.say("Sorry, I didn't catch that. Do you have any more questions to ask? Please say yes or no.")
+        gather = Gather(input='speech', action='/post-booking-options', method='POST', timeout=10)
+        gather.say("Sorry, I didn't catch that. Do you have any more questions to ask, or would you like to book another appointment or lab test? You can say 'book appointment', 'book lab test', 'ask a question', or 'no'.")
         resp.append(gather)
         return str(resp)
-
 
 @app.route('/status', methods=['POST'])
 def call_status():
@@ -955,6 +1058,591 @@ def health_check():
         "version": "1.0.0"
     })
 
+# --- Add this comment near the top of the file for DB setup ---
+#
+# -- SQL to create the lab_bookings table in PostgreSQL --
+# CREATE TABLE lab_bookings (
+#     id SERIAL PRIMARY KEY,
+#     test_name VARCHAR(255) NOT NULL,
+#     date DATE NOT NULL,
+#     time VARCHAR(50) NOT NULL,
+#     name VARCHAR(255) NOT NULL,
+#     mobile VARCHAR(20) NOT NULL,
+#     home_collection BOOLEAN NOT NULL DEFAULT FALSE,
+#     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+# );
+#
+# You can run this SQL in your PostgreSQL database to create the table for lab test bookings.
+
+# --- Ensure all lab test booking endpoints and helpers are at the top level and properly indented ---
+# (No code change, just fix indentation and remove stray lines if any)
+
+# --- At the top, after loading doctors_list.json ---
+with open('lab_tests.json', 'r', encoding='utf-8') as f:
+    LAB_TESTS_LIST = json.load(f)["tests"]
+
+def get_lab_test_names():
+    return sorted(set(test["name"] for test in LAB_TESTS_LIST))
+
+def get_lab_test_by_name(name):
+    for test in LAB_TESTS_LIST:
+        if test["name"].lower() == name.lower():
+            return test
+    return None
+
+def get_available_lab_test_timings(name):
+    test = get_lab_test_by_name(name)
+    if test:
+        return test["timings"]
+    return None
+
+def is_home_collection_available(name):
+    test = get_lab_test_by_name(name)
+    if test:
+        return test.get("home_sample_collection", False)
+    return False
+
+# --- In /server-rag or main booking entry, add logic to detect lab test booking intent ---
+# Example: If user says 'book lab test' or mentions a test name, start lab test booking flow
+# (Add this logic in /server-rag or similar entry point)
+# Pseudocode:
+# if 'lab test' in rag_question.lower() or any(test in rag_question.lower() for test in get_lab_test_names()):
+#     # Start lab test booking flow
+#     ...
+
+# --- Add new endpoints for lab test booking flow, similar to doctor appointment ---
+# /collect-lab-test, /confirm-lab-test, /collect-lab-date, /collect-lab-time, /confirm-lab-home, /finalize-lab-booking
+# Each should handle the relevant step, check home_sample_collection, and respond accordingly.
+# If home collection is not available, inform user to visit hospital.
+# Store lab test bookings in DB or JSON as needed. 
+
+# --- Lab Test Booking Endpoints ---
+
+# Helper: DB connection for lab bookings
+
+def get_lab_db_connection():
+    import os
+    return psycopg2.connect(
+        dbname=os.environ.get('PG_DB', 'your_db'),
+        user=os.environ.get('PG_USER', 'your_user'),
+        password=os.environ.get('PG_PASSWORD', 'your_password'),
+        host=os.environ.get('PG_HOST', 'localhost'),
+        port=os.environ.get('PG_PORT', 5432)
+    )
+
+def insert_lab_booking(test_name, date, time, name, mobile, home_collection):
+    conn = get_lab_db_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            """INSERT INTO lab_bookings (test_name, date, time, name, mobile, home_collection) VALUES (%s, %s, %s, %s, %s, %s)""",
+            (test_name, date, time, name, mobile, home_collection)
+        )
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        cur.close()
+        conn.close()
+
+@app.route('/collect-lab-test', methods=['POST'])
+def collect_lab_test():
+    call_sid = request.values.get('CallSid')
+    session = user_sessions.get(call_sid, {})
+    spoken_test = request.values.get('SpeechResult', '')
+    logger.info(f"/collect-lab-test: User input: {spoken_test}, Session: {session}")
+    test_names = get_lab_test_names()
+    from rapidfuzz import process, fuzz
+    match = process.extractOne(spoken_test, test_names, scorer=fuzz.token_sort_ratio)
+    resp = VoiceResponse()
+    test_list = ', '.join(test_names)
+    if not match:
+        gather = Gather(input='speech', action='/collect-lab-test', method='POST', barge_in=True, timeout=10)
+        gather.say(f"Available lab tests are: {test_list}. Which lab test would you like to book? Please say the test name.")
+        resp.append(gather)
+        # Add second prompt if no response
+        gather2 = Gather(input='speech', action='/collect-lab-test', method='POST', barge_in=True, timeout=8)
+        gather2.say("Are you still there? Please say the lab test name.")
+        resp.append(gather2)
+        resp.say("We didn't receive any input. Thank you for calling. Goodbye!")
+        resp.hangup()
+        return str(resp)
+    test, score, _ = match
+    if score < 85:
+        session['pending_lab_test'] = test
+        user_sessions[call_sid] = session
+        gather = Gather(input='speech', action='/confirm-lab-test', method='POST', barge_in=True, timeout=10)
+        gather.say(f"Did you mean {test}? Please say yes or no.")
+        resp.append(gather)
+        gather2 = Gather(input='speech', action='/confirm-lab-test', method='POST', barge_in=True, timeout=8)
+        gather2.say("Are you still there? Please say yes or no.")
+        resp.append(gather2)
+        resp.say("We didn't receive any input. Thank you for calling. Goodbye!")
+        resp.hangup()
+        return str(resp)
+    session['lab_test'] = test
+    user_sessions[call_sid] = session
+    gather = Gather(input='speech', action='/collect-lab-date', method='POST', barge_in=True, timeout=10)
+    gather.say(f"For which date do you want the {test}? Please say the date in the format 22 July 2025 or 22-07-2025.")
+    resp.append(gather)
+    gather2 = Gather(input='speech', action='/collect-lab-date', method='POST', barge_in=True, timeout=8)
+    gather2.say("Are you still there? Please say the date for your lab test booking.")
+    resp.append(gather2)
+    resp.say("We didn't receive any input. Thank you for calling. Goodbye!")
+    resp.hangup()
+    return str(resp)
+
+@app.route('/confirm-lab-test', methods=['POST'])
+def confirm_lab_test():
+    call_sid = request.values.get('CallSid')
+    session = user_sessions.get(call_sid, {})
+    answer = request.values.get('SpeechResult', '').strip().lower()
+    resp = VoiceResponse()
+    test = session.get('pending_lab_test')
+    yes_words = ['yes', 'yeah', 'yup', 'yep', 'correct', 'right', 'ya', 'sure', 'ok', 'okay']
+    no_words = ['no', 'nope', 'nah', 'not', 'incorrect', 'wrong']
+    if any(word in answer for word in yes_words) and test:
+        session['lab_test'] = test
+        session.pop('pending_lab_test', None)
+        user_sessions[call_sid] = session
+        gather = Gather(input='speech', action='/collect-lab-date', method='POST', timeout=10)
+        gather.say(f"Great. For which date do you want the {test}? Please say the date in the format 22 July 2025 or 22-07-2025.")
+        resp.append(gather)
+        gather2 = Gather(input='speech', action='/collect-lab-date', method='POST', timeout=8)
+        gather2.say("Are you still there? Please say the date for your lab test booking.")
+        resp.append(gather2)
+        resp.say("We didn't receive any input. Thank you for calling. Goodbye!")
+        resp.hangup()
+        return str(resp)
+    elif any(word in answer for word in no_words):
+        session.pop('pending_lab_test', None)
+        user_sessions[call_sid] = session
+        test_list = ', '.join(get_lab_test_names())
+        gather = Gather(input='speech', action='/collect-lab-test', method='POST', timeout=10)
+        gather.say(f"Okay, please say the test name again. Available lab tests are: {test_list}.")
+        resp.append(gather)
+        gather2 = Gather(input='speech', action='/collect-lab-test', method='POST', timeout=8)
+        gather2.say("Are you still there? Please say the lab test name.")
+        resp.append(gather2)
+        resp.say("We didn't receive any input. Thank you for calling. Goodbye!")
+        resp.hangup()
+        return str(resp)
+    else:
+        gather = Gather(input='speech', action='/confirm-lab-test', method='POST', timeout=10)
+        gather.say(f"Did you mean {test}? Please say yes or no.")
+        resp.append(gather)
+        gather2 = Gather(input='speech', action='/confirm-lab-test', method='POST', timeout=8)
+        gather2.say("Are you still there? Please say yes or no.")
+        resp.append(gather2)
+        resp.say("We didn't receive any input. Thank you for calling. Goodbye!")
+        resp.hangup()
+        return str(resp)
+
+@app.route('/collect-lab-date', methods=['POST'])
+def collect_lab_date():
+    call_sid = request.values.get('CallSid')
+    session = user_sessions.get(call_sid, {})
+    date_text = request.values.get('SpeechResult', '')
+    logger.info(f"/collect-lab-date: User input: {date_text}, Session: {session}")
+    date = extract_any_date(date_text)
+    if not date:
+        import dateparser
+        parsed = dateparser.parse(date_text)
+        if parsed:
+            date = parsed.strftime('%Y-%m-%d')
+    resp = VoiceResponse()
+    if date:
+        session['lab_date'] = date
+        user_sessions[call_sid] = session
+        gather = Gather(input='speech', action='/confirm-lab-date', method='POST', barge_in=True, timeout=10)
+        gather.say(f"You want to book the test on {date}. Is this correct? Please say yes or no.")
+        resp.append(gather)
+        gather2 = Gather(input='speech', action='/confirm-lab-date', method='POST', barge_in=True, timeout=8)
+        gather2.say("Are you still there? Please say yes or no.")
+        resp.append(gather2)
+        resp.say("We didn't receive any input. Thank you for calling. Goodbye!")
+        resp.hangup()
+        return str(resp)
+    else:
+        gather = Gather(input='speech', action='/collect-lab-date', method='POST', barge_in=True, timeout=10)
+        gather.say("Sorry, I didn't understand the date. Please say the date in the format 21 August 2025 or 21-08-2025.")
+        resp.append(gather)
+        gather2 = Gather(input='speech', action='/collect-lab-date', method='POST', barge_in=True, timeout=8)
+        gather2.say("Are you still there? Please say the date for your lab test booking.")
+        resp.append(gather2)
+        resp.say("We didn't receive any input. Thank you for calling. Goodbye!")
+        resp.hangup()
+        return str(resp)
+
+@app.route('/collect-lab-time', methods=['POST'])
+def collect_lab_time():
+    call_sid = request.values.get('CallSid')
+    session = user_sessions.get(call_sid, {})
+    time_text = request.values.get('SpeechResult', '')
+    logger.info(f"/collect-lab-time: User input: {time_text}, Session: {session}")
+    # 30-min slot logic
+    test_name = session.get('lab_test')
+    date = session.get('lab_date')
+    timings = get_available_lab_test_timings(test_name)
+    import re
+    from datetime import datetime, timedelta
+    slot_list = []
+    if timings:
+        match = re.match(r'(\d{1,2}:\d{2} [APMapm]{2}) to (\d{1,2}:\d{2} [APMapm]{2})', timings)
+        if match:
+            start_str, end_str = match.groups()
+            start_dt = datetime.strptime(start_str.upper(), '%I:%M %p')
+            end_dt = datetime.strptime(end_str.upper(), '%I:%M %p')
+            t = start_dt
+            while t < end_dt:
+                slot_start = t.strftime('%H:%M')
+                slot_end = (t + timedelta(minutes=30)).strftime('%H:%M')
+                slot_list.append(f"{slot_start}-{slot_end}")
+                t += timedelta(minutes=30)
+    logger.info(f"/collect-lab-time: Available slots for {test_name} on {date}: {slot_list}")
+    def extract_time_slot(text):
+        import dateparser
+        parsed = dateparser.parse(text)
+        if parsed:
+            slot_start = parsed.strftime('%H:%M')
+            for slot in slot_list:
+                if slot.startswith(slot_start):
+                    return slot
+        for slot in slot_list:
+            if text.strip() in slot:
+                return slot
+        return None
+    slot_val = extract_time_slot(time_text)
+    if slot_val:
+        session['lab_time'] = slot_val
+        user_sessions[call_sid] = session
+        resp = VoiceResponse()
+        gather = Gather(input='speech', action='/confirm-lab-time', method='POST', barge_in=True, timeout=10)
+        gather.say(f"You want to book the test at {slot_val}. Is this correct? Please say yes or no.")
+        resp.append(gather)
+        gather2 = Gather(input='speech', action='/confirm-lab-time', method='POST', barge_in=True, timeout=8)
+        gather2.say("Are you still there? Please say yes or no.")
+        resp.append(gather2)
+        resp.say("We didn't receive any input. Thank you for calling. Goodbye!")
+        resp.hangup()
+        return str(resp)
+    slot_str = ', '.join(slot_list) if slot_list else 'No slots available.'
+    resp = VoiceResponse()
+    gather = Gather(input='speech', action='/collect-lab-time', method='POST', barge_in=True, timeout=10)
+    gather.say(f"Sorry, available 30 minute slots for this test are: {slot_str}. Please say a valid time.")
+    resp.append(gather)
+    gather2 = Gather(input='speech', action='/collect-lab-time', method='POST', barge_in=True, timeout=8)
+    gather2.say("Are you still there? Please say the time for your lab test booking.")
+    resp.append(gather2)
+    resp.say("We didn't receive any input. Thank you for calling. Goodbye!")
+    resp.hangup()
+    return str(resp)
+
+@app.route('/confirm-lab-time', methods=['POST'])
+def confirm_lab_time():
+    call_sid = request.values.get('CallSid')
+    session = user_sessions.get(call_sid, {})
+    answer = request.values.get('SpeechResult', '').strip().lower()
+    logger.info(f"/confirm-lab-time: User response: {answer}, Session: {session}")
+    resp = VoiceResponse()
+    time = session.get('lab_time')
+    yes_words = ['yes', 'yeah', 'yup', 'yep', 'correct', 'right', 'ya', 'sure', 'ok', 'okay']
+    no_words = ['no', 'nope', 'nah', 'not', 'incorrect', 'wrong']
+    if any(word in answer for word in yes_words) and time:
+        user_sessions[call_sid] = session
+        test_name = session.get('lab_test')
+        if is_home_collection_available(test_name):
+            gather = Gather(input='speech', action='/confirm-lab-home', method='POST', barge_in=True, timeout=10)
+            gather.say(f"Do you want to book a home lab test? Please say yes or no.")
+            resp.append(gather)
+            gather2 = Gather(input='speech', action='/confirm-lab-home', method='POST', barge_in=True, timeout=8)
+            gather2.say("Are you still there? Please say yes or no.")
+            resp.append(gather2)
+            resp.say("We didn't receive any input. Thank you for calling. Goodbye!")
+            resp.hangup()
+            return str(resp)
+        else:
+            gather = Gather(input='speech', action='/confirm-lab-home', method='POST', barge_in=True, timeout=10)
+            gather.say(f"Sorry, home lab test is not available for {test_name}. You can do this test at our hospital. Do you want to proceed with hospital lab test? Please say yes or no.")
+            resp.append(gather)
+            gather2 = Gather(input='speech', action='/confirm-lab-home', method='POST', barge_in=True, timeout=8)
+            gather2.say("Are you still there? Please say yes or no.")
+            resp.append(gather2)
+            resp.say("We didn't receive any input. Thank you for calling. Goodbye!")
+            resp.hangup()
+            return str(resp)
+    elif any(word in answer for word in no_words):
+        gather = Gather(input='speech', action='/collect-lab-time', method='POST', barge_in=True, timeout=10)
+        gather.say("Okay, please say the time again for your lab test booking.")
+        resp.append(gather)
+        gather2 = Gather(input='speech', action='/collect-lab-time', method='POST', barge_in=True, timeout=8)
+        gather2.say("Are you still there? Please say the time for your lab test booking.")
+        resp.append(gather2)
+        resp.say("We didn't receive any input. Thank you for calling. Goodbye!")
+        resp.hangup()
+        return str(resp)
+    else:
+        gather = Gather(input='speech', action='/confirm-lab-time', method='POST', barge_in=True, timeout=10)
+        gather.say(f"You want to book the test at {time}. Is this correct? Please say yes or no.")
+        resp.append(gather)
+        gather2 = Gather(input='speech', action='/confirm-lab-time', method='POST', barge_in=True, timeout=8)
+        gather2.say("Are you still there? Please say yes or no.")
+        resp.append(gather2)
+        resp.say("We didn't receive any input. Thank you for calling. Goodbye!")
+        resp.hangup()
+        return str(resp)
+
+@app.route('/confirm-lab-home', methods=['POST'])
+def confirm_lab_home():
+    call_sid = request.values.get('CallSid')
+    session = user_sessions.get(call_sid, {})
+    answer = request.values.get('SpeechResult', '').strip().lower()
+    logger.info(f"/confirm-lab-home: User response: {answer}, Session: {session}")
+    resp = VoiceResponse()
+    test_name = session.get('lab_test')
+    yes_words = ['yes', 'yeah', 'yup', 'yep', 'correct', 'right', 'ya', 'sure', 'ok', 'okay']
+    no_words = ['no', 'nope', 'nah', 'not', 'incorrect', 'wrong']
+    if is_home_collection_available(test_name):
+        if any(word in answer for word in yes_words):
+            session['lab_home_collection'] = True
+            user_sessions[call_sid] = session
+            gather = Gather(input='speech', action='/collect-name-lab', method='POST', barge_in=True, timeout=10)
+            gather.say("Okay, we will arrange for a home lab test. Can you please share your good name for the lab test booking?")
+            resp.append(gather)
+            gather2 = Gather(input='speech', action='/collect-name-lab', method='POST', barge_in=True, timeout=8)
+            gather2.say("Are you still there? Please say yes or no.")
+            resp.append(gather2)
+            resp.say("We didn't receive any input. Thank you for calling. Goodbye!")
+            resp.hangup()
+            return str(resp)
+        elif any(word in answer for word in no_words):
+            session['lab_home_collection'] = False
+            user_sessions[call_sid] = session
+            gather = Gather(input='speech', action='/collect-name-lab', method='POST', barge_in=True, timeout=10)
+            gather.say("Okay, we will book your test at the hospital. Can you please share your good name for the lab test booking?")
+            resp.append(gather)
+            gather2 = Gather(input='speech', action='/collect-name-lab', method='POST', barge_in=True, timeout=8)
+            gather2.say("Are you still there? Please say yes or no.")
+            resp.append(gather2)
+            resp.say("We didn't receive any input. Thank you for calling. Goodbye!")
+            resp.hangup()
+            return str(resp)
+        else:
+            gather = Gather(input='speech', action='/confirm-lab-home', method='POST', barge_in=True, timeout=10)
+            gather.say("Do you want to book a home lab test? Please say yes or no.")
+            resp.append(gather)
+            gather2 = Gather(input='speech', action='/confirm-lab-home', method='POST', barge_in=True, timeout=8)
+            gather2.say("Are you still there? Please say yes or no.")
+            resp.append(gather2)
+            resp.say("We didn't receive any input. Thank you for calling. Goodbye!")
+            resp.hangup()
+            return str(resp)
+    else:
+        session['lab_home_collection'] = False
+        user_sessions[call_sid] = session
+        if any(word in answer for word in yes_words):
+            gather = Gather(input='speech', action='/collect-name-lab', method='POST', barge_in=True, timeout=10)
+            gather.say("Can you please share your good name for the lab test booking?")
+            resp.append(gather)
+            gather2 = Gather(input='speech', action='/collect-name-lab', method='POST', barge_in=True, timeout=8)
+            gather2.say("Are you still there? Please say yes or no.")
+            resp.append(gather2)
+            resp.say("We didn't receive any input. Thank you for calling. Goodbye!")
+            resp.hangup()
+            return str(resp)
+        elif any(word in answer for word in no_words):
+            gather = Gather(input='speech', action='/collect-lab-test', method='POST', barge_in=True, timeout=10)
+            gather.say("Okay, please say the test name again.")
+            resp.append(gather)
+            gather2 = Gather(input='speech', action='/collect-lab-test', method='POST', barge_in=True, timeout=8)
+            gather2.say("Are you still there? Please say the lab test name.")
+            resp.append(gather2)
+            resp.say("We didn't receive any input. Thank you for calling. Goodbye!")
+            resp.hangup()
+            return str(resp)
+        else:
+            gather = Gather(input='speech', action='/confirm-lab-home', method='POST', barge_in=True, timeout=10)
+            gather.say(f"Sorry, home lab test is not available for {test_name}. You can do this test at our hospital. Do you want to proceed with hospital lab test? Please say yes or no.")
+            resp.append(gather)
+            gather2 = Gather(input='speech', action='/confirm-lab-home', method='POST', barge_in=True, timeout=8)
+            gather2.say("Are you still there? Please say yes or no.")
+            resp.append(gather2)
+            resp.say("We didn't receive any input. Thank you for calling. Goodbye!")
+            resp.hangup()
+            return str(resp)
+
+@app.route('/collect-name-lab', methods=['POST'])
+def collect_name_lab():
+    call_sid = request.values.get('CallSid')
+    name = request.values.get('SpeechResult', '')
+    session = user_sessions.get(call_sid, {})
+    resp = VoiceResponse()
+    attempts = session.get('name_attempts', 0)
+    if not name.strip():
+        attempts += 1
+        session['name_attempts'] = attempts
+        user_sessions[call_sid] = session
+        if attempts < 2:
+            gather = Gather(input='speech', action='/collect-name-lab', method='POST', timeout=10)
+            gather.say("Sorry, I didn't catch your name. Can you repeat your name for the lab test booking?")
+            resp.append(gather)
+            gather2 = Gather(input='speech', action='/collect-name-lab', method='POST', timeout=8)
+            gather2.say("Are you still there? Please say your name for the lab test booking.")
+            resp.append(gather2)
+            resp.say("We didn't receive any input. Thank you for calling. Goodbye!")
+            resp.hangup()
+            return str(resp)
+        else:
+            resp.say("Sorry, I didn't catch your name. Please call again to book your lab test. Goodbye!")
+            resp.hangup()
+            return str(resp)
+    session['lab_name'] = name
+    session['name_attempts'] = 0
+    user_sessions[call_sid] = session
+    gather = Gather(input='dtmf', num_digits=10, action='/confirm-mobile-lab', method='POST', timeout=10)
+    gather.say("Thank you. Now, please enter your 10 digit mobile number using the keypad.")
+    resp.append(gather)
+    gather2 = Gather(input='dtmf', num_digits=10, action='/confirm-mobile-lab', method='POST', timeout=8)
+    gather2.say("Are you still there? Please enter your 10 digit mobile number.")
+    resp.append(gather2)
+    resp.say("We didn't receive any input. Thank you for calling. Goodbye!")
+    resp.hangup()
+    return str(resp)
+
+@app.route('/confirm-mobile-lab', methods=['POST'])
+def confirm_mobile_lab():
+    call_sid = request.values.get('CallSid')
+    digits = request.values.get('Digits', '')
+    session = user_sessions.get(call_sid, {})
+    session['lab_pending_mobile'] = digits
+    user_sessions[call_sid] = session
+    resp = VoiceResponse()
+    try:
+        if len(digits) == 10:
+            details = (
+                f"You are booking {session.get('lab_test','')} on {session.get('lab_date','')} at {session.get('lab_time','')}. "
+                f"Your name is {session.get('lab_name','')} and your mobile number is {digits}. Is this correct? Please say yes or no."
+            )
+            gather = Gather(input='speech', action='/finalize-lab-booking', method='POST', timeout=10)
+            gather.say(details)
+            resp.append(gather)
+            gather2 = Gather(input='speech', action='/finalize-lab-booking', method='POST', timeout=8)
+            gather2.say("Are you still there? Please say yes or no.")
+            resp.append(gather2)
+            resp.say("We didn't receive any input. Thank you for calling. Goodbye!")
+            resp.hangup()
+        else:
+            gather = Gather(input='dtmf', num_digits=10, action='/confirm-mobile-lab', method='POST', timeout=10)
+            gather.say("That was not a valid mobile number. Please enter your 10 digit mobile number using the keypad.")
+            resp.append(gather)
+            gather2 = Gather(input='dtmf', num_digits=10, action='/confirm-mobile-lab', method='POST', timeout=8)
+            gather2.say("Are you still there? Please enter your 10 digit mobile number.")
+            resp.append(gather2)
+            resp.say("We didn't receive any input. Thank you for calling. Goodbye!")
+            resp.hangup()
+    except Exception as e:
+        resp.say("Sorry, there was an error processing your input. Please try again later.")
+        resp.hangup()
+    return str(resp)
+
+@app.route('/finalize-lab-booking', methods=['POST'])
+def finalize_lab_booking():
+    call_sid = request.values.get('CallSid')
+    session = user_sessions.get(call_sid, {})
+    answer = request.values.get('SpeechResult', '').strip().lower()
+    logger.info(f"/finalize-lab-booking: User response: {answer}, Session: {session}")
+    resp = VoiceResponse()
+    digits = session.get('lab_pending_mobile', '')
+    test_name = session.get('lab_test')
+    date = session.get('lab_date')
+    time = session.get('lab_time')
+    name = session.get('lab_name')
+    home_collection = session.get('lab_home_collection', False)
+    yes_words = ['yes', 'yeah', 'yup', 'yep', 'correct', 'right', 'ya', 'sure', 'ok', 'okay']
+    no_words = ['no', 'nope', 'nah', 'not', 'incorrect', 'wrong']
+    if any(word in answer for word in yes_words) and len(digits) == 10:
+        try:
+            insert_lab_booking(test_name, date, time, name, digits, home_collection)
+            logger.info(f"/finalize-lab-booking: Booking confirmed for {test_name} on {date} at {time}, Name: {name}, Mobile: {digits}, Home: {home_collection}")
+            # --- Send SMS confirmation ---
+            sms_msg = (
+                f"Your lab test booking is confirmed!\n"
+                f"Test: {test_name}\n"
+                f"Date: {date}\n"
+                f"Time: {time}\n"
+                f"Name: {name}\n"
+                f"Mobile: {digits}\n"
+                f"Home Lab Test: {'Yes' if home_collection else 'No'}"
+            )
+            try:
+                send_sms(f"+91{digits}", sms_msg)
+            except Exception as e:
+                logger.error(f"Error sending SMS for lab test: {e}")
+            resp.say(f"Your lab test {test_name} has been booked for {date} at {time}. Thank you!")
+            gather = Gather(input='speech', action='/post-booking-options', method='POST', timeout=10)
+            gather.say("Do you have any more questions to ask, or would you like to book another appointment or lab test? You can say 'book appointment', 'book lab test', 'ask a question', or 'no'.")
+            resp.append(gather)
+            return str(resp)
+        except Exception as e:
+            logger.error(f"/finalize-lab-booking: Error booking: {e}")
+            resp.say("Sorry, there was an error booking your lab test. Please try again.")
+            resp.hangup()
+            return str(resp)
+    elif any(word in answer for word in no_words):
+        gather = Gather(input='speech', action='/collect-name-lab', method='POST', timeout=12)
+        gather.say("Let's try again. Please tell me your name for the lab test booking.")
+        resp.append(gather)
+        return str(resp)
+    else:
+        gather = Gather(input='speech', action='/finalize-lab-booking', method='POST', timeout=12)
+        gather.say("Is the information correct? Please say yes or no.")
+        resp.append(gather)
+        return str(resp) 
+
+@app.route('/confirm-lab-date', methods=['POST'])
+def confirm_lab_date():
+    call_sid = request.values.get('CallSid')
+    session = user_sessions.get(call_sid, {})
+    answer = request.values.get('SpeechResult', '').strip().lower()
+    logger.info(f"/confirm-lab-date: User response: {answer}, Session: {session}")
+    resp = VoiceResponse()
+    date = session.get('lab_date')
+    yes_words = ['yes', 'yeah', 'yup', 'yep', 'correct', 'right', 'ya', 'sure', 'ok', 'okay']
+    no_words = ['no', 'nope', 'nah', 'not', 'incorrect', 'wrong']
+    if any(word in answer for word in yes_words) and date:
+        user_sessions[call_sid] = session
+        gather = Gather(input='speech', action='/collect-lab-time', method='POST', barge_in=True, timeout=10)
+        timings = get_available_lab_test_timings(session.get('lab_test'))
+        gather.say(f"Great. At what time on {date}? Available timings for this test are: {timings}. Please say the time.")
+        resp.append(gather)
+        gather2 = Gather(input='speech', action='/collect-lab-time', method='POST', barge_in=True, timeout=8)
+        gather2.say("Are you still there? Please say the time for your lab test booking.")
+        resp.append(gather2)
+        resp.say("We didn't receive any input. Thank you for calling. Goodbye!")
+        resp.hangup()
+        return str(resp)
+    elif any(word in answer for word in no_words):
+        gather = Gather(input='speech', action='/collect-lab-date', method='POST', barge_in=True, timeout=10)
+        gather.say("Okay, please say the date again for your lab test booking.")
+        resp.append(gather)
+        gather2 = Gather(input='speech', action='/collect-lab-date', method='POST', barge_in=True, timeout=8)
+        gather2.say("Are you still there? Please say the date for your lab test booking.")
+        resp.append(gather2)
+        resp.say("We didn't receive any input. Thank you for calling. Goodbye!")
+        resp.hangup()
+        return str(resp)
+    else:
+        gather = Gather(input='speech', action='/confirm-lab-date', method='POST', barge_in=True, timeout=10)
+        gather.say(f"You want to book the test on {date}. Is this correct? Please say yes or no.")
+        resp.append(gather)
+        gather2 = Gather(input='speech', action='/confirm-lab-date', method='POST', barge_in=True, timeout=8)
+        gather2.say("Are you still there? Please say yes or no.")
+        resp.append(gather2)
+        resp.say("We didn't receive any input. Thank you for calling. Goodbye!")
+        resp.hangup()
+        return str(resp)
+
 if __name__ == '__main__':
     # Log startup
     logger.info("Starting webhook server on http://localhost:5000")
@@ -967,4 +1655,3 @@ if __name__ == '__main__':
         port=5000,
         ssl_context=None  # Let ngrok handle SSL
     ) 
-
