@@ -43,5 +43,24 @@ This project is a Flask + Twilio based conversational voice assistant for bookin
 - `appointments.json` - Doctor schedules and slot data
 - `sms.py` - SMS sending utility
 
+## PostgreSQL Table Commands
+
+1)   SELECT * FROM lab_bookings ORDER BY created_at DESC;
+
+2)   SELECT * FROM bookings ORDER BY id DESC;
 
 
+## Steps to Start This Project
+1. Create a virtual environment:
+   `python -m venv venv`
+2. Install dependencies:
+   `pip install -r requirements.txt`
+3. Start ngrok to expose your local server:
+   `ngrok http 5000`
+4. Change directory to RAG and start the RAG backend:
+   `cd RAG`
+   `python rag_main.py`
+5. Open a new terminal and start the main Flask server:
+   `python main.py`
+6. In another new terminal, start the call handler:
+   `python call.py`
