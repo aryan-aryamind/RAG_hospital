@@ -197,6 +197,11 @@ def server_rag():
 
     resp = VoiceResponse()
 
+    # --- Lab test reschedule intent detection (must come before booking intent) ---
+    if 'reschedule' in rag_question.lower() and 'lab test' in rag_question.lower():
+        resp.redirect('/reschedule-lab-test', method='POST')
+        return str(resp)
+
     # --- Lab test booking intent detection ---
     lab_keywords = ['lab test', 'book lab test', 'blood test', 'health checkup', 'scan', 'package']
     test_names = get_lab_test_names()
@@ -304,6 +309,13 @@ def server_rag():
         )
         if api_resp.status_code == 200:
             rag_ans = api_resp.json().get('answer')
+            # Custom fallback for not-found answers
+            if rag_ans and (
+                'document does not contain information' in rag_ans.lower() or
+                'cannot fulfill this request' in rag_ans.lower() or
+                'no information' in rag_ans.lower()
+            ):
+                rag_ans = "Sorry, I am unable to help with that as an AI voice agent. Can you please ask another question?"
             logger.info(f"RAG API response: {rag_ans}")
             summarize_ans = summarize(rag_ans)
             logger.info(f"Summarize Answer: {summarize_ans}")
@@ -837,7 +849,7 @@ def collect_name():
         session['name_attempts'] = attempts
         user_sessions[call_sid] = session
         if attempts < 2:
-            gather = Gather(input='speech', action='/collect-name', method='POST', timeout=10)
+            gather = Gather(input='speech', action='/collect-name', method='POST', timeout=10, language='en-IN')
             gather.say("Sorry, I didn't catch your name. Can you repeat your name for the booking?")
             resp.append(gather)
             return str(resp)
@@ -1001,6 +1013,7 @@ def post_booking_options():
     answer = request.values.get('SpeechResult', '').strip().lower()
     logger.info(f"/post-booking-options: User response: {answer}")
     resp = VoiceResponse()
+    # Booking/lab/no intents
     if any(word in answer for word in ['book lab test', 'lab test', 'blood test', 'health checkup', 'scan', 'package']):
         gather = Gather(input='speech', action='/collect-lab-test', method='POST', timeout=10)
         gather.say("Which lab test would you like to book? Please say the test name.")
@@ -1021,9 +1034,44 @@ def post_booking_options():
         resp.hangup()
         return str(resp)
     else:
-        gather = Gather(input='speech', action='/post-booking-options', method='POST', timeout=10)
-        gather.say("Sorry, I didn't catch that. Do you have any more questions to ask, or would you like to book another appointment or lab test? You can say 'book appointment', 'book lab test', 'ask a question', or 'no'.")
-        resp.append(gather)
+        # Treat any other input as a RAG question
+        try:
+            api_resp = requests.post(
+                API,
+                json={
+                    'question': answer,
+                    "session_id": "user123",
+                }
+            )
+            if api_resp.status_code == 200:
+                rag_ans = api_resp.json().get('answer')
+                # Custom fallback for not-found answers
+                if rag_ans and (
+                    'document does not contain information' in rag_ans.lower() or
+                    'cannot fulfill this request' in rag_ans.lower() or
+                    'no information' in rag_ans.lower()
+                ):
+                    rag_ans = "Sorry, I am unable to help with that as an AI voice agent. Can you please ask another question?"
+                logger.info(f"RAG API response (post-booking): {rag_ans}")
+                summarize_ans = summarize(rag_ans)
+                logger.info(f"Summarize Answer (post-booking): {summarize_ans}")
+                gather = Gather(
+                    input='speech',
+                    action='/post-booking-options',
+                    method='POST',
+                    barge_in=True
+                )
+                gather.say(summarize_ans)
+                resp.append(gather)
+            else:
+                raise Exception(f"API returned status {api_resp.status_code}")
+        except Exception as e:
+            logger.error(f"Error calling RAG API (post-booking): {e}")
+            resp.say("Sorry, I'm having trouble accessing the information right now.")
+        # Always prompt again for more questions or bookings
+        gather2 = Gather(input='speech', action='/post-booking-options', method='POST', timeout=10)
+        gather2.say("Do you have any more questions to ask, or would you like to book another appointment or lab test? You can say 'book appointment', 'book lab test', 'ask a question', or 'no'.")
+        resp.append(gather2)
         return str(resp)
 
 @app.route('/status', methods=['POST'])
@@ -1537,10 +1585,10 @@ def collect_name_lab():
         session['name_attempts'] = attempts
         user_sessions[call_sid] = session
         if attempts < 2:
-            gather = Gather(input='speech', action='/collect-name-lab', method='POST', timeout=10)
+            gather = Gather(input='speech', action='/collect-name-lab', method='POST', timeout=10, language='en-IN')
             gather.say("Sorry, I didn't catch your name. Can you repeat your name for the lab test booking?")
             resp.append(gather)
-            gather2 = Gather(input='speech', action='/collect-name-lab', method='POST', timeout=8)
+            gather2 = Gather(input='speech', action='/collect-name-lab', method='POST', timeout=8, language='en-IN')
             gather2.say("Are you still there? Please say your name for the lab test booking.")
             resp.append(gather2)
             resp.say("We didn't receive any input. Thank you for calling. Goodbye!")
@@ -1734,6 +1782,414 @@ def confirm_lab_date():
         gather2.say("Are you still there? Please say yes or no.")
         resp.append(gather2)
         resp.say("We didn't receive any input. Thank you for calling. Goodbye!")
+        resp.hangup()
+        return str(resp)
+
+# --- Doctor Appointment Rescheduling ---
+@app.route('/reschedule-appointment', methods=['POST'])
+def reschedule_appointment():
+    from twilio.twiml.voice_response import VoiceResponse, Gather
+    call_sid = request.values.get('CallSid')
+    session = user_sessions.get(call_sid, {})
+    step = session.get('reschedule_step', 'start')
+    resp = VoiceResponse()
+    if step == 'start':
+        # Step 1: Ask for mobile number
+        session['reschedule_step'] = 'get_mobile'
+        user_sessions[call_sid] = session
+        gather = Gather(input='dtmf', num_digits=10, action='/reschedule-appointment', method='POST', timeout=15)
+        gather.say("To reschedule your appointment, please enter your 10 digit mobile number using the keypad.")
+        resp.append(gather)
+        return str(resp)
+    elif step == 'get_mobile':
+        digits = request.values.get('Digits', '')
+        if len(digits) != 10:
+            gather = Gather(input='dtmf', num_digits=10, action='/reschedule-appointment', method='POST', timeout=15)
+            gather.say("That was not a valid mobile number. Please enter your 10 digit mobile number using the keypad.")
+            resp.append(gather)
+            return str(resp)
+        session['reschedule_mobile'] = digits
+        # Step 2: Find latest booking for this mobile
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("SELECT id, doctor, department, date, time, name FROM bookings WHERE mobile=%s ORDER BY date DESC, time DESC LIMIT 1", (digits,))
+        booking = cur.fetchone()
+        cur.close()
+        conn.close()
+        if not booking:
+            resp.say("Sorry, no appointment was found for this mobile number. Please check and try again.")
+            resp.hangup()
+            return str(resp)
+        session['reschedule_booking_id'] = booking[0]
+        session['reschedule_doctor'] = booking[1]
+        session['reschedule_department'] = booking[2]
+        session['reschedule_old_date'] = booking[3]
+        session['reschedule_old_time'] = booking[4]
+        session['reschedule_name'] = booking[5]
+        user_sessions[call_sid] = session
+        # Step 3: Ask for new date
+        session['reschedule_step'] = 'get_new_date'
+        user_sessions[call_sid] = session
+        gather = Gather(input='speech', action='/reschedule-appointment', method='POST', timeout=12)
+        gather.say(f"Found your appointment with {booking[1]} in {booking[2]} on {booking[3]} at {booking[4]}. What new date would you like to reschedule to? Please say the date.")
+        resp.append(gather)
+        return str(resp)
+    elif step == 'get_new_date':
+        date_text = request.values.get('SpeechResult', '')
+        date = extract_any_date(date_text)
+        if not date:
+            gather = Gather(input='speech', action='/reschedule-appointment', method='POST', timeout=12)
+            gather.say("Sorry, I didn't understand the date. Please say the new date for your appointment.")
+            resp.append(gather)
+            return str(resp)
+        session['reschedule_new_date'] = date
+        session['reschedule_step'] = 'get_new_time'
+        user_sessions[call_sid] = session
+        gather = Gather(input='speech', action='/reschedule-appointment', method='POST', timeout=12)
+        gather.say(f"On {date}, what time would you like? Please say the time, for example 3pm or 14:00.")
+        resp.append(gather)
+        return str(resp)
+    elif step == 'get_new_time':
+        time_text = request.values.get('SpeechResult', '')
+        time_val = extract_time(time_text)
+        if not time_val:
+            gather = Gather(input='speech', action='/reschedule-appointment', method='POST', timeout=12)
+            gather.say("Sorry, I didn't understand the time. Please say the new time for your appointment.")
+            resp.append(gather)
+            return str(resp)
+        # Step 4: Check slot availability
+        department = session['reschedule_department']
+        doctor = session['reschedule_doctor']
+        date = session['reschedule_new_date']
+        available_slots = get_available_slots_for_department_and_date(department, date)
+        slot_available = any(slot['doctor'] == doctor and slot['time'] == time_val for slot in available_slots)
+        if not slot_available:
+            # Suggest next available slot for this doctor
+            next_slot = None
+            from datetime import datetime
+            requested_time = datetime.strptime(time_val.split('-')[0], '%H:%M')
+            for slot in available_slots:
+                if slot['doctor'] == doctor:
+                    slot_time = datetime.strptime(slot['time'].split('-')[0], '%H:%M')
+                    if slot_time > requested_time:
+                        next_slot = slot['time']
+                        break
+            if next_slot:
+                gather = Gather(input='speech', action='/reschedule-appointment', method='POST', timeout=12)
+                gather.say(f"Sorry, that slot is not available. The next available slot for {doctor} is at {next_slot}. Would you like to reschedule to this time? Please say yes or no.")
+                session['reschedule_suggested_time'] = next_slot
+                session['reschedule_step'] = 'confirm_suggested_time'
+                user_sessions[call_sid] = session
+                resp.append(gather)
+                return str(resp)
+            else:
+                resp.say("Sorry, no available slots for this doctor on that date. Please try another date.")
+                resp.hangup()
+                return str(resp)
+        session['reschedule_new_time'] = time_val
+        session['reschedule_step'] = 'confirm_new_time'
+        user_sessions[call_sid] = session
+        gather = Gather(input='speech', action='/reschedule-appointment', method='POST', timeout=12)
+        gather.say(f"You want to reschedule your appointment with {doctor} in {department} to {date} at {time_val}. Is this correct? Please say yes or no.")
+        resp.append(gather)
+        return str(resp)
+    elif step == 'confirm_suggested_time':
+        answer = request.values.get('SpeechResult', '').strip().lower()
+        yes_words = ['yes', 'yeah', 'yup', 'yep', 'correct', 'right', 'ya', 'sure', 'ok', 'okay']
+        no_words = ['no', 'nope', 'nah', 'not', 'incorrect', 'wrong']
+        if any(word in answer for word in yes_words):
+            session['reschedule_new_time'] = session['reschedule_suggested_time']
+            session['reschedule_step'] = 'confirm_new_time'
+            user_sessions[call_sid] = session
+            gather = Gather(input='speech', action='/reschedule-appointment', method='POST', timeout=12)
+            gather.say(f"You want to reschedule your appointment to {session['reschedule_new_date']} at {session['reschedule_new_time']}. Is this correct? Please say yes or no.")
+            resp.append(gather)
+            return str(resp)
+        elif any(word in answer for word in no_words):
+            session['reschedule_step'] = 'get_new_time'
+            user_sessions[call_sid] = session
+            gather = Gather(input='speech', action='/reschedule-appointment', method='POST', timeout=12)
+            gather.say("Okay, please say another time for your appointment.")
+            resp.append(gather)
+            return str(resp)
+        else:
+            gather = Gather(input='speech', action='/reschedule-appointment', method='POST', timeout=12)
+            gather.say("Would you like to reschedule to the suggested time? Please say yes or no.")
+            resp.append(gather)
+            return str(resp)
+    elif step == 'confirm_new_time':
+        answer = request.values.get('SpeechResult', '').strip().lower()
+        yes_words = ['yes', 'yeah', 'yup', 'yep', 'correct', 'right', 'ya', 'sure', 'ok', 'okay']
+        no_words = ['no', 'nope', 'nah', 'not', 'incorrect', 'wrong']
+        if any(word in answer for word in yes_words):
+            # Step 5: Update booking in DB and JSON
+            booking_id = session['reschedule_booking_id']
+            new_date = session['reschedule_new_date']
+            new_time = session['reschedule_new_time']
+            conn = get_db_connection()
+            cur = conn.cursor()
+            cur.execute("UPDATE bookings SET date=%s, time=%s WHERE id=%s", (new_date, new_time, booking_id))
+            conn.commit()
+            cur.close()
+            conn.close()
+            # Update bookings.json
+            try:
+                with open('bookings.json', 'r', encoding='utf-8') as f:
+                    bookings = json.load(f)
+                for b in bookings:
+                    if b.get('mobile') == session['reschedule_mobile'] and b.get('doctor') == session['reschedule_doctor'] and b.get('date') == session['reschedule_old_date'] and b.get('time') == session['reschedule_old_time']:
+                        b['date'] = new_date
+                        b['time'] = new_time
+                with open('bookings.json', 'w', encoding='utf-8') as f:
+                    json.dump(bookings, f, indent=2)
+            except Exception as e:
+                logger.error(f"Error updating bookings.json: {e}")
+            # Step 6: Confirm and send SMS
+            sms_msg = (
+                f"Your appointment has been rescheduled!\n"
+                f"Doctor: {session['reschedule_doctor']}\n"
+                f"Department: {session['reschedule_department']}\n"
+                f"Date: {new_date}\n"
+                f"Time: {new_time}\n"
+                f"Name: {session['reschedule_name']}\n"
+                f"Mobile: {session['reschedule_mobile']}"
+            )
+            try:
+                send_sms(f"+91{session['reschedule_mobile']}", sms_msg)
+            except Exception as e:
+                logger.error(f"Error sending SMS: {e}")
+            resp.say(f"Your appointment has been rescheduled to {new_date} at {new_time}. Thank you!")
+            resp.hangup()
+            return str(resp)
+        elif any(word in answer for word in no_words):
+            resp.say("Okay, rescheduling cancelled. Your appointment remains unchanged. Thank you!")
+            resp.hangup()
+            return str(resp)
+        else:
+            gather = Gather(input='speech', action='/reschedule-appointment', method='POST', timeout=12)
+            gather.say("Is the new date and time correct? Please say yes or no.")
+            resp.append(gather)
+            return str(resp)
+    else:
+        resp.say("Sorry, something went wrong in the rescheduling process. Please try again.")
+        resp.hangup()
+        return str(resp)
+
+# --- Lab Test Rescheduling ---
+@app.route('/reschedule-lab-test', methods=['POST'])
+def reschedule_lab_test():
+    from twilio.twiml.voice_response import VoiceResponse, Gather
+    call_sid = request.values.get('CallSid')
+    session = user_sessions.get(call_sid, {})
+    step = session.get('lab_reschedule_step', 'start')
+    resp = VoiceResponse()
+    if step == 'start':
+        # Step 1: Ask for mobile number
+        session['lab_reschedule_step'] = 'get_mobile'
+        user_sessions[call_sid] = session
+        gather = Gather(input='dtmf', num_digits=10, action='/reschedule-lab-test', method='POST', timeout=15)
+        gather.say("To reschedule your lab test, please enter your 10 digit mobile number using the keypad.")
+        resp.append(gather)
+        return str(resp)
+    elif step == 'get_mobile':
+        digits = request.values.get('Digits', '')
+        if len(digits) != 10:
+            gather = Gather(input='dtmf', num_digits=10, action='/reschedule-lab-test', method='POST', timeout=15)
+            gather.say("That was not a valid mobile number. Please enter your 10 digit mobile number using the keypad.")
+            resp.append(gather)
+            return str(resp)
+        session['lab_reschedule_mobile'] = digits
+        # Step 2: Find latest lab booking for this mobile
+        conn = get_lab_db_connection()
+        cur = conn.cursor()
+        cur.execute("SELECT id, test_name, date, time, name FROM lab_bookings WHERE mobile=%s ORDER BY date DESC, time DESC LIMIT 1", (digits,))
+        booking = cur.fetchone()
+        cur.close()
+        conn.close()
+        if not booking:
+            resp.say("Sorry, no lab test booking was found for this mobile number. Please check and try again.")
+            resp.hangup()
+            return str(resp)
+        session['lab_reschedule_booking_id'] = booking[0]
+        session['lab_reschedule_test'] = booking[1]
+        session['lab_reschedule_old_date'] = booking[2]
+        session['lab_reschedule_old_time'] = booking[3]
+        session['lab_reschedule_name'] = booking[4]
+        user_sessions[call_sid] = session
+        # Step 3: Ask for new date
+        session['lab_reschedule_step'] = 'get_new_date'
+        user_sessions[call_sid] = session
+        gather = Gather(input='speech', action='/reschedule-lab-test', method='POST', timeout=12)
+        gather.say(f"Found your lab test booking for {booking[1]} on {booking[2]} at {booking[3]}. What new date would you like to reschedule to? Please say the date.")
+        resp.append(gather)
+        return str(resp)
+    elif step == 'get_new_date':
+        date_text = request.values.get('SpeechResult', '')
+        date = extract_any_date(date_text)
+        if not date:
+            gather = Gather(input='speech', action='/reschedule-lab-test', method='POST', timeout=12)
+            gather.say("Sorry, I didn't understand the date. Please say the new date for your lab test.")
+            resp.append(gather)
+            return str(resp)
+        session['lab_reschedule_new_date'] = date
+        session['lab_reschedule_step'] = 'get_new_time'
+        user_sessions[call_sid] = session
+        gather = Gather(input='speech', action='/reschedule-lab-test', method='POST', timeout=12)
+        gather.say(f"On {date}, what time would you like? Please say the time, for example 3pm or 14:00.")
+        resp.append(gather)
+        return str(resp)
+    elif step == 'get_new_time':
+        time_text = request.values.get('SpeechResult', '')
+        # Build slot list for the test
+        test_name = session['lab_reschedule_test']
+        timings = get_available_lab_test_timings(test_name)
+        import re
+        from datetime import datetime, timedelta
+        slot_list = []
+        if timings:
+            match = re.match(r'(\d{1,2}:\d{2} [APMapm]{2}) to (\d{1,2}:\d{2} [APMapm]{2})', timings)
+            if match:
+                start_str, end_str = match.groups()
+                start_dt = datetime.strptime(start_str.upper(), '%I:%M %p')
+                end_dt = datetime.strptime(end_str.upper(), '%I:%M %p')
+                t = start_dt
+                while t < end_dt:
+                    slot_start = t.strftime('%H:%M')
+                    slot_end = (t + timedelta(minutes=30)).strftime('%H:%M')
+                    slot_list.append(f"{slot_start}-{slot_end}")
+                    t += timedelta(minutes=30)
+        def extract_time_slot(text):
+            import dateparser
+            parsed = dateparser.parse(text)
+            if parsed:
+                slot_start = parsed.strftime('%H:%M')
+                for slot in slot_list:
+                    if slot.startswith(slot_start):
+                        return slot
+            for slot in slot_list:
+                if text.strip() in slot:
+                    return slot
+            return None
+        slot_val = extract_time_slot(time_text)
+        if not slot_val:
+            slot_str = ', '.join(slot_list) if slot_list else 'No slots available.'
+            gather = Gather(input='speech', action='/reschedule-lab-test', method='POST', timeout=12)
+            gather.say(f"Sorry, available 30 minute slots for this test are: {slot_str}. Please say a valid time.")
+            resp.append(gather)
+            return str(resp)
+        # Step 4: Check slot availability
+        date = session['lab_reschedule_new_date']
+        if is_lab_slot_booked(test_name, date, slot_val):
+            # Suggest next available slot
+            requested_time = datetime.strptime(slot_val.split('-')[0], '%H:%M')
+            next_slot = None
+            for slot in slot_list:
+                slot_time = datetime.strptime(slot.split('-')[0], '%H:%M')
+                if slot_time > requested_time and not is_lab_slot_booked(test_name, date, slot):
+                    next_slot = slot
+                    break
+            if not next_slot:
+                for slot in slot_list:
+                    if not is_lab_slot_booked(test_name, date, slot):
+                        next_slot = slot
+                        break
+            if next_slot:
+                gather = Gather(input='speech', action='/reschedule-lab-test', method='POST', timeout=12)
+                gather.say(f"Sorry, that slot is already booked. The next available slot is at {next_slot}. Would you like to reschedule to this time? Please say yes or no.")
+                session['lab_reschedule_suggested_time'] = next_slot
+                session['lab_reschedule_step'] = 'confirm_suggested_time'
+                user_sessions[call_sid] = session
+                resp.append(gather)
+                return str(resp)
+            else:
+                resp.say("Sorry, all slots are booked for this test on this date. Please try another date.")
+                resp.hangup()
+                return str(resp)
+        session['lab_reschedule_new_time'] = slot_val
+        session['lab_reschedule_step'] = 'confirm_new_time'
+        user_sessions[call_sid] = session
+        gather = Gather(input='speech', action='/reschedule-lab-test', method='POST', timeout=12)
+        gather.say(f"You want to reschedule your lab test {test_name} to {date} at {slot_val}. Is this correct? Please say yes or no.")
+        resp.append(gather)
+        return str(resp)
+    elif step == 'confirm_suggested_time':
+        answer = request.values.get('SpeechResult', '').strip().lower()
+        yes_words = ['yes', 'yeah', 'yup', 'yep', 'correct', 'right', 'ya', 'sure', 'ok', 'okay']
+        no_words = ['no', 'nope', 'nah', 'not', 'incorrect', 'wrong']
+        if any(word in answer for word in yes_words):
+            session['lab_reschedule_new_time'] = session['lab_reschedule_suggested_time']
+            session['lab_reschedule_step'] = 'confirm_new_time'
+            user_sessions[call_sid] = session
+            gather = Gather(input='speech', action='/reschedule-lab-test', method='POST', timeout=12)
+            gather.say(f"You want to reschedule your lab test to {session['lab_reschedule_new_date']} at {session['lab_reschedule_new_time']}. Is this correct? Please say yes or no.")
+            resp.append(gather)
+            return str(resp)
+        elif any(word in answer for word in no_words):
+            session['lab_reschedule_step'] = 'get_new_time'
+            user_sessions[call_sid] = session
+            gather = Gather(input='speech', action='/reschedule-lab-test', method='POST', timeout=12)
+            gather.say("Okay, please say another time for your lab test.")
+            resp.append(gather)
+            return str(resp)
+        else:
+            gather = Gather(input='speech', action='/reschedule-lab-test', method='POST', timeout=12)
+            gather.say("Would you like to reschedule to the suggested time? Please say yes or no.")
+            resp.append(gather)
+            return str(resp)
+    elif step == 'confirm_new_time':
+        answer = request.values.get('SpeechResult', '').strip().lower()
+        yes_words = ['yes', 'yeah', 'yup', 'yep', 'correct', 'right', 'ya', 'sure', 'ok', 'okay']
+        no_words = ['no', 'nope', 'nah', 'not', 'incorrect', 'wrong']
+        if any(word in answer for word in yes_words):
+            # Step 5: Update booking in DB and JSON
+            booking_id = session['lab_reschedule_booking_id']
+            new_date = session['lab_reschedule_new_date']
+            new_time = session['lab_reschedule_new_time']
+            conn = get_lab_db_connection()
+            cur = conn.cursor()
+            cur.execute("UPDATE lab_bookings SET date=%s, time=%s WHERE id=%s", (new_date, new_time, booking_id))
+            conn.commit()
+            cur.close()
+            conn.close()
+            # Update lab_bookings.json
+            try:
+                with open('lab_bookings.json', 'r', encoding='utf-8') as f:
+                    bookings = json.load(f)
+                for b in bookings:
+                    if b.get('mobile') == session['lab_reschedule_mobile'] and b.get('test_name') == session['lab_reschedule_test'] and b.get('date') == session['lab_reschedule_old_date'] and b.get('time') == session['lab_reschedule_old_time']:
+                        b['date'] = new_date
+                        b['time'] = new_time
+                with open('lab_bookings.json', 'w', encoding='utf-8') as f:
+                    json.dump(bookings, f, indent=2)
+            except Exception as e:
+                logger.error(f"Error updating lab_bookings.json: {e}")
+            # Step 6: Confirm and send SMS
+            sms_msg = (
+                f"Your lab test booking has been rescheduled!\n"
+                f"Test: {session['lab_reschedule_test']}\n"
+                f"Date: {new_date}\n"
+                f"Time: {new_time}\n"
+                f"Name: {session['lab_reschedule_name']}\n"
+                f"Mobile: {session['lab_reschedule_mobile']}"
+            )
+            try:
+                send_sms(f"+91{session['lab_reschedule_mobile']}", sms_msg)
+            except Exception as e:
+                logger.error(f"Error sending SMS: {e}")
+            resp.say(f"Your lab test has been rescheduled to {new_date} at {new_time}. Thank you!")
+            resp.hangup()
+            return str(resp)
+        elif any(word in answer for word in no_words):
+            resp.say("Okay, rescheduling cancelled. Your lab test booking remains unchanged. Thank you!")
+            resp.hangup()
+            return str(resp)
+        else:
+            gather = Gather(input='speech', action='/reschedule-lab-test', method='POST', timeout=12)
+            gather.say("Is the new date and time correct? Please say yes or no.")
+            resp.append(gather)
+            return str(resp)
+    else:
+        resp.say("Sorry, something went wrong in the rescheduling process. Please try again.")
         resp.hangup()
         return str(resp)
 
