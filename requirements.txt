@@ -14,3 +14,4 @@ uvicorn
 rapidfuzz
 dateparser
 psycopg2-binary
+watchdog

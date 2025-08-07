@@ -9,7 +9,7 @@ app = FastAPI()
 
 # Initialize the RAG system
 PDF_PATH = os.path.join(os.path.dirname(__file__), "shalby_main.pdf")
-GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY") or "AIzaSyCmCdzv4ZL3z19NTpFhRSkLKK25HPZEvcA"
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY") or "AIzaSyCpQ6xci5SwchY_JrYNjjF_HCypDdnKoYs"
 
 try:
     rag_system = RAGSystem(pdf_path=PDF_PATH, google_api_key=GOOGLE_API_KEY)
