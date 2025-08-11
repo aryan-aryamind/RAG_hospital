@@ -1,0 +1,29 @@
+{
+  "long_term_memory": [
+    {
+      "user_input": "Uh, I want to know which Orthopedics doctors are available.",
+      "ai_response": "Shalby Hospitals is globally recognized for its excellence in Bone and Joint care. Dr. Vikram Shah, the founder and Chairman & Managing Director of Shalby Hospitals, is a renowned orthopedic surgeon, particularly known for his innovative \"Zero Technique\" in joint replacement surgeries.\n\nAs a leading multispecialty hospital chain, Shalby Hospitals has a dedicated team of highly skilled orthopedic specialists for various procedures including joint replacements (knee/hip), trauma, spine surgery, and arthroscopy.\n\nTo find out about the specific orthopedic doctors available and their schedules, or to book an appointment, please contact Shalby Hospitals directly at +91 7069001001 or +91 95120 06886.",
+      "timestamp": "2025-08-07T15:36:03.746370"
+    },
+    {
+      "user_input": "I want to know, which,  Which neurology doctor is available.",
+      "ai_response": "Shalby Hospitals has a comprehensive Neuro Sciences department with a team of highly skilled neurologists and neurosurgeons specializing in various treatments, including neurology, neurosurgery, and stroke treatment.\n\nWhile the specific names of all neurology doctors are not listed here, Shalby Hospitals ensures that you receive care from expert specialists in this field.\n\nTo know which neurology doctor is currently available or to schedule an appointment, please contact Shalby Hospitals directly at +91 7069001001 or +91 95120 06886. They will be able to provide you with the most up-to-date information and assist with your booking.",
+      "timestamp": "2025-08-07T15:37:46.063224"
+    }
+  ],
+  "episodic_memory": {
+    "33c3b38a-6b61-4f01-a34f-d14e9e9e52d6": [
+      {
+        "user_input": "Uh, I want to know which Orthopedics doctors are available.",
+        "ai_response": "Shalby Hospitals is globally recognized for its excellence in Bone and Joint care. Dr. Vikram Shah, the founder and Chairman & Managing Director of Shalby Hospitals, is a renowned orthopedic surgeon, particularly known for his innovative \"Zero Technique\" in joint replacement surgeries.\n\nAs a leading multispecialty hospital chain, Shalby Hospitals has a dedicated team of highly skilled orthopedic specialists for various procedures including joint replacements (knee/hip), trauma, spine surgery, and arthroscopy.\n\nTo find out about the specific orthopedic doctors available and their schedules, or to book an appointment, please contact Shalby Hospitals directly at +91 7069001001 or +91 95120 06886.",
+        "timestamp": "2025-08-07T15:36:03.746370"
+      },
+      {
+        "user_input": "I want to know, which,  Which neurology doctor is available.",
+        "ai_response": "Shalby Hospitals has a comprehensive Neuro Sciences department with a team of highly skilled neurologists and neurosurgeons specializing in various treatments, including neurology, neurosurgery, and stroke treatment.\n\nWhile the specific names of all neurology doctors are not listed here, Shalby Hospitals ensures that you receive care from expert specialists in this field.\n\nTo know which neurology doctor is currently available or to schedule an appointment, please contact Shalby Hospitals directly at +91 7069001001 or +91 95120 06886. They will be able to provide you with the most up-to-date information and assist with your booking.",
+        "timestamp": "2025-08-07T15:37:46.063224"
+      }
+    ]
+  },
+  "current_session": "33c3b38a-6b61-4f01-a34f-d14e9e9e52d6"
+}

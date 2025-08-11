@@ -50,7 +50,6 @@ coverage.xml
 .python-version
 
 # dotenv
-.env
 
 # Logs
 *.log
@@ -60,7 +59,6 @@ instance/
 .webhook.log
 
 # VS Code
-.vscode/
 
 # Mac
 .DS_Store
@@ -70,3 +68,5 @@ instance/
 
 # Ignore zipped files
 *.zip 
+config.bat
+node_modules

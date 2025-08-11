@@ -1,3 +1,4 @@
+import utils.session
 from flask import Flask, request, jsonify, Response
 from twilio.twiml.voice_response import VoiceResponse, Gather
 from twilio.request_validator import RequestValidator
@@ -11,7 +12,9 @@ from rapidfuzz import process, fuzz
 import dateparser
 from sms import send_sms
 import requests
-from model import summarize, is_bye, extract_date, extract_time, is_confirm
+from model import is_bye, is_yes,summarize, extract_date, extract_time, detect_language
+from google_tts import GoogleCloudTTS
+from chain import ConversationalRAGChain
 import psycopg2
 import csv
 
@@ -36,7 +39,12 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+pdf_path = "D:\RAG_working\RAG\shalby_main.pdf"
+bot = ConversationalRAGChain(pdf_path=pdf_path)
+tts = GoogleCloudTTS(cache_dir="static/audio_cache")
+
 app = Flask(__name__)
+app.config['STATIC_FOLDER'] = 'static'
 
 # Twilio authentication
 TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN")
@@ -301,35 +309,55 @@ def server_rag():
 
     # RAG fallback
     try:
-        api_resp = requests.post(
-            API,
-            json={
-                'question': rag_question,
-                "session_id": "user123",
-            }
-        )
-        if api_resp.status_code == 200:
-            rag_ans = api_resp.json().get('answer')
-            # Custom fallback for not-found answers
-            if rag_ans and (
-                'document does not contain information' in rag_ans.lower() or
-                'cannot fulfill this request' in rag_ans.lower() or
-                'no information' in rag_ans.lower()
-            ):
-                rag_ans = "Sorry, I am unable to help with that as an AI voice agent. Can you please ask another question?"
-            logger.info(f"RAG API response: {rag_ans}")
-            summarize_ans = summarize(rag_ans)
-            logger.info(f"Summarize Answer: {summarize_ans}")
-            gather = Gather(
+        if is_bye(rag_question):
+            resp.say("Thank you!", voice='alice')
+            resp.hangup()
+            return str(resp)
+
+        answer = bot.invoke(rag_question)
+        logger.info(f"RAG answer: {answer}")
+        
+        language = detect_language(answer)
+        logger.info(f"Detected language: {language}")
+        speech = tts.generate_speech(text=answer,language_code=language)
+        logger.info(f"Speech path: {speech}")
+        gather = Gather(
                 input='speech',
                 action='/server-rag',
                 method='POST',
                 barge_in=True
             )
-            gather.say(summarize_ans)
-            resp.append(gather)
-        else:
-            raise Exception(f"API returned status {api_resp.status_code}")
+        gather.play(speech)
+        resp.append(gather)
+        # api_resp = requests.post(
+        #     API,
+        #     json={
+        #         'question': rag_question,
+        #         "session_id": "user123",
+        #     }
+        # )
+        # if api_resp.status_code == 200:
+        #     rag_ans = api_resp.json().get('answer')
+        #     # Custom fallback for not-found answers
+        #     if rag_ans and (
+        #         'document does not contain information' in rag_ans.lower() or
+        #         'cannot fulfill this request' in rag_ans.lower() or
+        #         'no information' in rag_ans.lower()
+        #     ):
+        #         rag_ans = "Sorry, I am unable to help with that as an AI voice agent. Can you please ask another question?"
+        #     logger.info(f"RAG API response: {rag_ans}")
+        #     summarize_ans = summarize(rag_ans)
+        #     logger.info(f"Summarize Answer: {summarize_ans}")
+        #     gather = Gather(
+        #         input='speech',
+        #         action='/server-rag',
+        #         method='POST',
+        #         barge_in=True
+        #     )
+        #     gather.say(summarize_ans)
+        #     resp.append(gather)
+    #     else:
+    #         raise Exception(f"API returned status {api_resp.status_code}")
     except Exception as e:
         logger.error(f"Error calling RAG API: {e}")
         resp.say("Sorry, I'm having trouble accessing the information right now.")
@@ -728,9 +756,10 @@ def confirm_datetime():
     date = session.get('date')
     time = session.get('time')
     doctor = session.get('doctor')
-    yes_words = ['yes', 'yeah', 'yup', 'yep', 'correct', 'right', 'ya', 'sure', 'ok', 'okay']
-    no_words = ['no', 'nope', 'nah', 'not', 'incorrect', 'wrong']
-    if any(word in answer for word in yes_words):
+    # yes_words = ['yes', 'yeah', 'yup', 'yep', 'correct', 'right', 'ya', 'sure', 'ok', 'okay']
+    # no_words = ['no', 'nope', 'nah', 'not', 'incorrect', 'wrong']
+    # if any(word in answer for word in yes_words):
+    if is_yes(answer):
         # If doctor is already set (from slot match), proceed to confirm-booking
         if doctor:
             session['step'] = 'confirm'
@@ -763,7 +792,8 @@ def confirm_datetime():
             gather.say(f"Sorry, no doctors are available at that time. Please say another time.")
             resp.append(gather)
             return str(resp)
-    elif any(word in answer for word in no_words):
+    # elif any(word in answer for word in no_words):
+    elif not is_yes(answer):
         # Instead of restarting, go back to time selection for same department/date
         gather = Gather(input='speech', action='/collect-time', method='POST', timeout=12)
         gather.say(f"Okay, let's try another time. Please say the time you want for your appointment in {department} on {date}.")
@@ -1037,35 +1067,55 @@ def post_booking_options():
     else:
         # Treat any other input as a RAG question
         try:
-            api_resp = requests.post(
-                API,
-                json={
-                    'question': answer,
-                    "session_id": "user123",
-                }
-            )
-            if api_resp.status_code == 200:
-                rag_ans = api_resp.json().get('answer')
-                # Custom fallback for not-found answers
-                if rag_ans and (
-                    'document does not contain information' in rag_ans.lower() or
-                    'cannot fulfill this request' in rag_ans.lower() or
-                    'no information' in rag_ans.lower()
-                ):
-                    rag_ans = "Sorry, I am unable to help with that as an AI voice agent. Can you please ask another question?"
-                logger.info(f"RAG API response (post-booking): {rag_ans}")
-                summarize_ans = summarize(rag_ans)
-                logger.info(f"Summarize Answer (post-booking): {summarize_ans}")
-                gather = Gather(
+            if is_bye(answer):
+                resp.say("Thank you!", voice='alice')
+                resp.hangup()
+                return str(resp)
+
+            answer = bot.invoke(answer)
+            logger.info(f"RAG answer: {answer}")
+            
+            language = detect_language(answer)
+            logger.info(f"Detected language: {language}")
+            speech = tts.generate_speech(text=answer,language_code=language)
+            logger.info(f"Speech path: {speech}")
+            gather = Gather(
                     input='speech',
-                    action='/post-booking-options',
+                    action='/server-rag',
                     method='POST',
                     barge_in=True
                 )
-                gather.say(summarize_ans)
-                resp.append(gather)
-            else:
-                raise Exception(f"API returned status {api_resp.status_code}")
+            gather.play(speech)
+            resp.append(gather)
+            # api_resp = requests.post(
+            #     API,
+            #     json={
+            #         'question': answer,
+            #         "session_id": "user123",
+            #     }
+            # )
+            # if api_resp.status_code == 200:
+            #     rag_ans = api_resp.json().get('answer')
+            #     # Custom fallback for not-found answers
+            #     if rag_ans and (
+            #         'document does not contain information' in rag_ans.lower() or
+            #         'cannot fulfill this request' in rag_ans.lower() or
+            #         'no information' in rag_ans.lower()
+            #     ):
+            #         rag_ans = "Sorry, I am unable to help with that as an AI voice agent. Can you please ask another question?"
+            #     logger.info(f"RAG API response (post-booking): {rag_ans}")
+            #     summarize_ans = summarize(rag_ans)
+            #     logger.info(f"Summarize Answer (post-booking): {summarize_ans}")
+            #     gather = Gather(
+            #         input='speech',
+            #         action='/post-booking-options',
+            #         method='POST',
+            #         barge_in=True
+            #     )
+            #     gather.say(summarize_ans)
+            #     resp.append(gather)
+            # else:
+            #     raise Exception(f"API returned status {api_resp.status_code}")
         except Exception as e:
             logger.error(f"Error calling RAG API (post-booking): {e}")
             resp.say("Sorry, I'm having trouble accessing the information right now.")
@@ -1248,9 +1298,10 @@ def confirm_lab_test():
     answer = request.values.get('SpeechResult', '').strip().lower()
     resp = VoiceResponse()
     test = session.get('pending_lab_test')
-    yes_words = ['yes', 'yeah', 'yup', 'yep', 'correct', 'right', 'ya', 'sure', 'ok', 'okay']
+    # yes_words = ['yes', 'yeah', 'yup', 'yep', 'correct', 'right', 'ya', 'sure', 'ok', 'okay']
     no_words = ['no', 'nope', 'nah', 'not', 'incorrect', 'wrong']
-    if any(word in answer for word in yes_words) and test:
+    # if any(word in answer for word in yes_words) and test:
+    if is_yes(answer) and test:
         session['lab_test'] = test
         session.pop('pending_lab_test', None)
         user_sessions[call_sid] = session
@@ -1263,7 +1314,8 @@ def confirm_lab_test():
         resp.say("We didn't receive any input. Thank you for calling. Goodbye!")
         resp.hangup()
         return str(resp)
-    elif any(word in answer for word in no_words):
+    # elif any(word in answer for word in no_words):
+    elif not is_yes(answer):
         session.pop('pending_lab_test', None)
         user_sessions[call_sid] = session
         test_list = ', '.join(get_lab_test_names())
@@ -1449,9 +1501,10 @@ def confirm_lab_time():
     logger.info(f"/confirm-lab-time: User response: {answer}, Session: {session}")
     resp = VoiceResponse()
     time = session.get('lab_time')
-    yes_words = ['yes', 'yeah', 'yup', 'yep', 'correct', 'right', 'ya', 'sure', 'ok', 'okay']
-    no_words = ['no', 'nope', 'nah', 'not', 'incorrect', 'wrong']
-    if any(word in answer for word in yes_words) and time:
+    # yes_words = ['yes', 'yeah', 'yup', 'yep', 'correct', 'right', 'ya', 'sure', 'ok', 'okay']
+    # no_words = ['no', 'nope', 'nah', 'not', 'incorrect', 'wrong']
+    # if any(word in answer for word in yes_words) and time:
+    if is_yes(answer) and time:
         user_sessions[call_sid] = session
         test_name = session.get('lab_test')
         if is_home_collection_available(test_name):
@@ -1474,7 +1527,8 @@ def confirm_lab_time():
             resp.say("We didn't receive any input. Thank you for calling. Goodbye!")
             resp.hangup()
             return str(resp)
-    elif any(word in answer for word in no_words):
+    # elif any(word in answer for word in no_words):
+    elif not is_yes(answer):
         gather = Gather(input='speech', action='/collect-lab-time', method='POST', barge_in=True, timeout=10)
         gather.say("Okay, please say the time again for your lab test booking.")
         resp.append(gather)
@@ -1506,7 +1560,8 @@ def confirm_lab_home():
     yes_words = ['yes', 'yeah', 'yup', 'yep', 'correct', 'right', 'ya', 'sure', 'ok', 'okay']
     no_words = ['no', 'nope', 'nah', 'not', 'incorrect', 'wrong']
     if is_home_collection_available(test_name):
-        if any(word in answer for word in yes_words):
+        # if any(word in answer for word in yes_words):
+        if is_yes(answer):
             session['lab_home_collection'] = True
             user_sessions[call_sid] = session
             gather = Gather(input='speech', action='/collect-name-lab', method='POST', barge_in=True, timeout=10)
@@ -1518,7 +1573,8 @@ def confirm_lab_home():
             resp.say("We didn't receive any input. Thank you for calling. Goodbye!")
             resp.hangup()
             return str(resp)
-        elif any(word in answer for word in no_words):
+        # elif any(word in answer for word in no_words):
+        elif not is_yes(answer):
             session['lab_home_collection'] = False
             user_sessions[call_sid] = session
             gather = Gather(input='speech', action='/collect-name-lab', method='POST', barge_in=True, timeout=10)
@@ -1543,7 +1599,8 @@ def confirm_lab_home():
     else:
         session['lab_home_collection'] = False
         user_sessions[call_sid] = session
-        if any(word in answer for word in yes_words):
+        # if any(word in answer for word in yes_words):
+        if is_yes(answer):
             gather = Gather(input='speech', action='/collect-name-lab', method='POST', barge_in=True, timeout=10)
             gather.say("Can you please share your good name for the lab test booking?")
             resp.append(gather)
@@ -1553,7 +1610,8 @@ def confirm_lab_home():
             resp.say("We didn't receive any input. Thank you for calling. Goodbye!")
             resp.hangup()
             return str(resp)
-        elif any(word in answer for word in no_words):
+        # elif any(word in answer for word in no_words):
+        elif not is_yes(answer):
             gather = Gather(input='speech', action='/collect-lab-test', method='POST', barge_in=True, timeout=10)
             gather.say("Okay, please say the test name again.")
             resp.append(gather)
@@ -1661,9 +1719,10 @@ def finalize_lab_booking():
     time = session.get('lab_time')
     name = session.get('lab_name')
     home_collection = session.get('lab_home_collection', False)
-    yes_words = ['yes', 'yeah', 'yup', 'yep', 'correct', 'right', 'ya', 'sure', 'ok', 'okay']
-    no_words = ['no', 'nope', 'nah', 'not', 'incorrect', 'wrong']
-    if any(word in answer for word in yes_words) and len(digits) == 10:
+    # yes_words = ['yes', 'yeah', 'yup', 'yep', 'correct', 'right', 'ya', 'sure', 'ok', 'okay']
+    # no_words = ['no', 'nope', 'nah', 'not', 'incorrect', 'wrong']
+    # if any(word in answer for word in yes_words) and len(digits) == 10:
+    if is_yes(answer) and len(digits) == 10:
         try:
             insert_lab_booking(test_name, date, time, name, digits, home_collection)
             logger.info(f"/finalize-lab-booking: Booking confirmed for {test_name} on {date} at {time}, Name: {name}, Mobile: {digits}, Home: {home_collection}")
@@ -1722,7 +1781,8 @@ def finalize_lab_booking():
             resp.say("Sorry, there was an error booking your lab test. Please try again.")
             resp.hangup()
             return str(resp)
-    elif any(word in answer for word in no_words):
+    # elif any(word in answer for word in no_words):
+    elif not is_yes(answer):
         gather = Gather(input='speech', action='/collect-name-lab', method='POST', timeout=10)
         gather.say("Let's try again. Please tell me your name for the lab test booking.")
         resp.append(gather)
@@ -1751,9 +1811,10 @@ def confirm_lab_date():
     logger.info(f"/confirm-lab-date: User response: {answer}, Session: {session}")
     resp = VoiceResponse()
     date = session.get('lab_date')
-    yes_words = ['yes', 'yeah', 'yup', 'yep', 'correct', 'right', 'ya', 'sure', 'ok', 'okay']
-    no_words = ['no', 'nope', 'nah', 'not', 'incorrect', 'wrong']
-    if any(word in answer for word in yes_words) and date:
+    # yes_words = ['yes', 'yeah', 'yup', 'yep', 'correct', 'right', 'ya', 'sure', 'ok', 'okay']
+    # no_words = ['no', 'nope', 'nah', 'not', 'incorrect', 'wrong']
+    # if any(word in answer for word in yes_words) and date:
+    if is_yes(answer) and date:
         user_sessions[call_sid] = session
         gather = Gather(input='speech', action='/collect-lab-time', method='POST', barge_in=True, timeout=10)
         timings = get_available_lab_test_timings(session.get('lab_test'))
@@ -1765,7 +1826,8 @@ def confirm_lab_date():
         resp.say("We didn't receive any input. Thank you for calling. Goodbye!")
         resp.hangup()
         return str(resp)
-    elif any(word in answer for word in no_words):
+    # elif any(word in answer for word in no_words):
+    elif not is_yes(answer):
         gather = Gather(input='speech', action='/collect-lab-date', method='POST', barge_in=True, timeout=10)
         gather.say("Okay, please say the date again for your lab test booking.")
         resp.append(gather)
@@ -1896,9 +1958,10 @@ def reschedule_appointment():
         return str(resp)
     elif step == 'confirm_suggested_time':
         answer = request.values.get('SpeechResult', '').strip().lower()
-        yes_words = ['yes', 'yeah', 'yup', 'yep', 'correct', 'right', 'ya', 'sure', 'ok', 'okay']
-        no_words = ['no', 'nope', 'nah', 'not', 'incorrect', 'wrong']
-        if any(word in answer for word in yes_words):
+        # yes_words = ['yes', 'yeah', 'yup', 'yep', 'correct', 'right', 'ya', 'sure', 'ok', 'okay']
+        # no_words = ['no', 'nope', 'nah', 'not', 'incorrect', 'wrong']
+        # if any(word in answer for word in yes_words):
+        if is_yes(answer):
             session['reschedule_new_time'] = session['reschedule_suggested_time']
             session['reschedule_step'] = 'confirm_new_time'
             user_sessions[call_sid] = session
@@ -1906,7 +1969,8 @@ def reschedule_appointment():
             gather.say(f"You want to reschedule your appointment to {session['reschedule_new_date']} at {session['reschedule_new_time']}. Is this correct? Please say yes or no.")
             resp.append(gather)
             return str(resp)
-        elif any(word in answer for word in no_words):
+        # elif any(word in answer for word in no_words):
+        elif not is_yes(answer):
             session['reschedule_step'] = 'get_new_time'
             user_sessions[call_sid] = session
             gather = Gather(input='speech', action='/reschedule-appointment', method='POST', timeout=12)
@@ -1920,9 +1984,10 @@ def reschedule_appointment():
             return str(resp)
     elif step == 'confirm_new_time':
         answer = request.values.get('SpeechResult', '').strip().lower()
-        yes_words = ['yes', 'yeah', 'yup', 'yep', 'correct', 'right', 'ya', 'sure', 'ok', 'okay']
-        no_words = ['no', 'nope', 'nah', 'not', 'incorrect', 'wrong']
-        if any(word in answer for word in yes_words):
+        # yes_words = ['yes', 'yeah', 'yup', 'yep', 'correct', 'right', 'ya', 'sure', 'ok', 'okay']
+        # no_words = ['no', 'nope', 'nah', 'not', 'incorrect', 'wrong']
+        # if any(word in answer for word in yes_words):
+        if is_yes(answer):
             # Step 5: Update booking in DB and JSON
             booking_id = session['reschedule_booking_id']
             new_date = session['reschedule_new_date']
@@ -1962,7 +2027,8 @@ def reschedule_appointment():
             resp.say(f"Your appointment has been rescheduled to {new_date} at {new_time}. Thank you!")
             resp.hangup()
             return str(resp)
-        elif any(word in answer for word in no_words):
+        # elif any(word in answer for word in no_words):
+        elif not is_yes(answer):
             resp.say("Okay, rescheduling cancelled. Your appointment remains unchanged. Thank you!")
             resp.hangup()
             return str(resp)

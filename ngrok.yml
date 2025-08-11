@@ -1,0 +1,16 @@
+# ngrok configuration file
+version: "2"
+authtoken: 2xfLjtKANTSA9sVSpKtowaK0LSW_5Jb1XFz58LHjmZHCyzjCn
+
+tunnels:
+  dtmf:
+    proto: http
+    addr: 5000
+    
+  english:
+    proto: http
+    addr: 5001
+
+  hindi:
+    proto: http
+    addr: 5002
